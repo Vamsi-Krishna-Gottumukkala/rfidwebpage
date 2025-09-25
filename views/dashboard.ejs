@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Library Dashboard</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; padding: 2em; }
+        .container { max-width: 700px; margin: auto; }
+        h1, h2 { color: #000; }
+        nav { margin-bottom: 2em; background: white; padding: 1em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        nav a { text-decoration: none; font-weight: bold; color: #0866ff; font-size: 1.1em; }
+        .panel { background: white; padding: 1.5em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2em; }
+        #live-log-list { list-style-type: none; padding: 0; margin: 0; min-height: 100px; }
+        #live-log-list li { padding: 1.2em; border-bottom: 1px solid #ddd; font-size: 1.2em; text-align: center; }
+        .log-login { color: #31a24c; }
+        .log-logout { color: #555; }
+        .log-error, .log-ignored { color: #f02849; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        .counter-grid { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; }
+        .counter-grid div { padding: 1em; }
+        .counter-grid h3 { margin: 0 0 0.5em 0; color: #65676b; }
+        .counter-grid span { font-size: 2.5em; font-weight: bold; color: #1c1e21; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav><a href="/register">Go to Card Registration Page &rarr;</a></nav>
+        
+        <div class="panel">
+            <ul id="live-log-list">
+                <li style="color: #65676b; font-size: 1.2em;">Please scan your card</li>
+            </ul>
+        </div>
+        
+        <div class="panel">
+            <h2>Branch Visits Today</h2>
+            <div class="counter-grid">
+                <div>
+                    <h3>CSE-A</h3>
+                    <span id="count-cse-a"><%= (counts.find(c => c.branch === 'cse-a') || {visit_count: 0}).visit_count %></span>
+                </div>
+                <div>
+                    <h3>CSE-B</h3>
+                    <span id="count-cse-b"><%= (counts.find(c => c.branch === 'cse-b') || {visit_count: 0}).visit_count %></span>
+                </div>
+                <div>
+                    <h3>CSE-C</h3>
+                    <span id="count-cse-c"><%= (counts.find(c => c.branch === 'cse-c') || {visit_count: 0}).visit_count %></span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>Today's Attendance Log</h2>
+            <table id="attendance-table">
+                 <thead><tr><th>Roll No</th><th>Name</th><th>Login</th><th>Logout</th></tr></thead>
+                 <tbody>
+                    <% logs.forEach(log => { %>
+                        <tr>
+                            <td><%= log.roll_no %></td>
+                            <td><%= log.student_name %></td>
+                            <td><%= log.login_time %></td>
+                            <td><%= log.logout_time || '---' %></td>
+                        </tr>
+                    <% }); %>
+                 </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const liveLogList = document.getElementById('live-log-list');
+        // Get a reference to the main attendance table body
+        const attendanceTableBody = document.getElementById('attendance-table').getElementsByTagName('tbody')[0];
+
+
+        socket.on('scan_event', function(data) {
+            const logItem = document.createElement('li');
+            let message = '';
+            
+            if (data.status === 'LOGIN') {
+                logItem.className = 'log-login';
+                message = `Welcome to the Library, <strong>${data.student_name}</strong>`;
+                
+                // --- THIS LOGIC WAS MISSING ---
+                // Create a new row and add it to the top of the attendance table
+                const newRow = attendanceTableBody.insertRow(0);
+                newRow.insertCell(0).innerHTML = data.roll_no;
+                newRow.insertCell(1).innerHTML = data.student_name;
+                newRow.insertCell(2).innerHTML = data.time;
+                newRow.insertCell(3).innerHTML = '---';
+
+            } else if (data.status === 'LOGOUT') {
+                logItem.className = 'log-logout';
+                message = `Thank You, <strong>${data.student_name}</strong>`;
+
+                // --- THIS LOGIC WAS MISSING ---
+                // Find the existing row for this student and update their logout time
+                const rows = attendanceTableBody.getElementsByTagName('tr');
+                for (let i = 0; i < rows.length; i++) {
+                    const rollNoCell = rows[i].cells[0];
+                    const logoutCell = rows[i].cells[3]; // Logout time is the 4th cell
+                    if (rollNoCell.textContent == data.roll_no && logoutCell.textContent === '---') {
+                        logoutCell.innerHTML = data.time;
+                        break;
+                    }
+                }
+
+            } else if (data.status === 'UNREGISTERED' || data.status === 'NO_DETAILS') {
+                logItem.className = 'log-error';
+                message = `⚠️ Card not recognized. Please register.`;
+            } else if (data.status === 'IGNORED') {
+                logItem.className = 'log-error';
+                message = `🚫 ${data.message}`;
+            }
+
+            if (message) {
+                liveLogList.innerHTML = ''; // Clear previous message
+                logItem.innerHTML = message;
+                liveLogList.prepend(logItem);
+            }
+        });
+
+        socket.on('counts_update', function(counts) {
+            const countA = counts.find(c => c.branch === 'cse-a') || {visit_count: 0};
+            const countB = counts.find(c => c.branch === 'cse-b') || {visit_count: 0};
+            const countC = counts.find(c => c.branch === 'cse-c') || {visit_count: 0};
+            
+            document.getElementById('count-cse-a').textContent = countA.visit_count;
+            document.getElementById('count-cse-b').textContent = countB.visit_count;
+            document.getElementById('count-cse-c').textContent = countC.visit_count;
+        });
+    </script>
+</body>
+</html>

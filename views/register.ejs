@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RFID Registration</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; padding: 2em; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #000; text-align: center; }
+        nav { margin-bottom: 2em; font-weight: bold; }
+        nav a { text-decoration: none; color: #0866ff; }
+        form { display: grid; grid-template-columns: 1fr; gap: 1.2em; }
+        label { font-weight: bold; }
+        input[type="text"] { padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
+        button { padding: 0.8em 1.5em; background-color: #3498db; color: white; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; }
+        .flash { padding: 1em; margin-bottom: 1em; border-radius: 4px; text-align: center; }
+        .flash.success { background-color: #d4edda; color: #155724; }
+        .flash.error { background-color: #f8d7da; color: #721c24; }
+        #uid-status { margin-left: 10px; color: green; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav><a href="/">&larr; Back to Live Dashboard</a></nav>
+        <h1>Register New Card</h1>
+
+        <% if (messages.success) { %><div class="flash success"><%= messages.success %></div><% } %>
+        <% if (messages.error) { %><div class="flash error"><%= messages.error %></div><% } %>
+
+        <form action="/add" method="post">
+            <div>
+                <label for="roll_no">Roll Number:</label>
+                <input type="text" id="roll_no" name="roll_no" required>
+            </div>
+            <div>
+                <label for="uid">RFID Card UID:</label>
+                <input type="text" id="uid" name="uid" placeholder="Scan new card to auto-fill..." required readonly>
+                <span id="uid-status"></span>
+            </div>
+            <button type="submit">Register Details</button>
+        </form>
+    </div>
+    <script>
+        const socket = io();
+        const uidField = document.getElementById('uid');
+        const uidStatus = document.getElementById('uid-status');
+        socket.on('scan_event', function(data) {
+            if (data.uid) {
+                uidField.value = data.uid;
+                uidStatus.textContent = 'UID Captured!';
+                setTimeout(() => { uidStatus.textContent = ''; }, 3000);
+            }
+        });
+    </script>
+</body>
+</html>
