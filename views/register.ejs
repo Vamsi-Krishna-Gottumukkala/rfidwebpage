@@ -5,15 +5,59 @@
     <title>RFID Registration</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { font-family: system-ui, sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; padding: 2em; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; }
+        /* MODIFIED: Increased container width */
+        .container { max-width: 700px; margin: auto; padding: 2em; }
         h1 { color: #000; text-align: center; }
-        nav { margin-bottom: 2em; font-weight: bold; }
-        nav a { text-decoration: none; color: #0866ff; }
-        form { display: grid; grid-template-columns: 1fr; gap: 1.2em; }
-        label { font-weight: bold; }
-        input[type="text"] { padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
-        button { padding: 0.8em 1.5em; background-color: #3498db; color: white; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; }
+        
+        .navbar-container { width: 100%; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 0.75em 2em; box-sizing: border-box; margin-bottom: 2em; }
+        nav { display: flex; justify-content: space-between; align-items: center; gap: 1em; }
+        .nav-brand { display: flex; align-items: center; gap: 1em; font-weight: bold; color: #1c1e21; }
+        .nav-logo { height: 50px; width: auto; }
+        .nav-brand-name { font-size: 1.2em; }
+        .nav-links { display: flex; align-items: center; gap: 2em; font-size: 1.1em; }
+        nav a { text-decoration: none; font-weight: bold; color: #0866ff; }
+        .logout-btn { background-color: #f02849; color: white; padding: 0.5em 1em; border-radius: 6px; text-decoration: none; transition: background-color 0.2s; }
+        .logout-btn:hover { background-color: #d0203c; }
+        
+        @media (max-width: 900px) {
+            .nav-brand-name { display: none; }
+            .nav-links { gap: 1em; }
+        }
+
+        .panel { background: white; padding: 2.5em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        form { display: grid; grid-template-columns: 1fr; gap: 1.5em; } /* Increased gap */
+        
+        /* MODIFIED: New styles for form rows */
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.5em;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+        }
+        label { font-weight: bold; display: block; margin-bottom: 0.5em; }
+        input[type="text"] { 
+            padding: 0.8em; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            font-size: 1em; 
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button { 
+            padding: 0.8em 1.5em; 
+            background-color: #3498db; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            font-size: 1.1em; 
+            cursor: pointer;
+            width: fit-content; /* Button only as wide as its content */
+            justify-self: end; /* Align button to the right */
+        }
         .flash { padding: 1em; margin-bottom: 1em; border-radius: 4px; text-align: center; }
         .flash.success { background-color: #d4edda; color: #155724; }
         .flash.error { background-color: #f8d7da; color: #721c24; }
@@ -21,32 +65,50 @@
     </style>
 </head>
 <body>
+    <div class="navbar-container">
+        <nav>
+            <div class="nav-brand">
+                <img src="/assets/gvplogo.png" alt="College Logo" class="nav-logo">
+                <span class="nav-brand-name">Gayatri Vidya Parishad College for Degree and P.G. Courses (A)</span>
+            </div>
+            <div class="nav-links">
+                <a href="/reports">Reports</a>
+                <a href="/dashboard">Live Dashboard</a>
+                <a href="/manage-users">Manage Users</a>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+        </nav>
+    </div>
+
     <div class="container">
-        <nav><a href="/">&larr; Back to Live Dashboard</a></nav>
-        <h1>Register New Card</h1>
+        <div class="panel">
+            <h1>Register New Card</h1>
 
-        <% if (messages.success) { %><div class="flash success"><%= messages.success %></div><% } %>
-        <% if (messages.error) { %><div class="flash error"><%= messages.error %></div><% } %>
+            <% if (messages.success) { %><div class="flash success"><%= messages.success %></div><% } %>
+            <% if (messages.error) { %><div class="flash error"><%= messages.error %></div><% } %>
 
-        <form action="/add" method="post">
-            <div>
-                <label for="user_id">User ID (Roll No / Faculty ID):</label>
-                <input type="text" id="user_id" name="user_id" required>
-            </div>
-            <div>
-                <label for="uid">RFID Card UID:</label>
-                <input type="text" id="uid" name="uid" placeholder="Scan new card to auto-fill..." required readonly>
-                <span id="uid-status"></span>
-            </div>
-            <button type="submit">Register Details</button>
-        </form>
+            <form action="/add" method="post">
+                <div class="form-row">
+                    <label for="user_id">User ID (Roll No / Faculty ID):</label>
+                    <input type="text" id="user_id" name="user_id" required>
+                </div>
+                <div class="form-row">
+                    <label for="uid">RFID Card UID:</label>
+                    <div class="input-group">
+                        <input type="text" id="uid" name="uid" placeholder="Scan new card to auto-fill..." required readonly>
+                        <span id="uid-status"></span>
+                    </div>
+                </div>
+                <button type="submit">Register Details</button>
+            </form>
+        </div>
     </div>
     <script>
         const socket = io();
         const uidField = document.getElementById('uid');
         const uidStatus = document.getElementById('uid-status');
         socket.on('scan_event', function(data) {
-            if (data.uid) {
+            if (data.uid && document.hasFocus()) {
                 uidField.value = data.uid;
                 uidStatus.textContent = 'UID Captured!';
                 setTimeout(() => { uidStatus.textContent = ''; }, 3000);
@@ -55,3 +117,4 @@
     </script>
 </body>
 </html>
+
