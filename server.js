@@ -79,20 +79,32 @@ async function handleCardScan(uid) {
     }
 }
 
-// MODIFIED: Query now selects branch_code instead of branch_name
+// MODIFIED: This function now groups counts by degree
 async function getTodayBranchCounts() {
     const today = format(new Date(), 'yyyy-MM-dd');
-    const [counts] = await dbPool.query(
-        `SELECT p.branch_code, COUNT(al.log_id) as visit_count 
+    const [flatCounts] = await dbPool.query(
+        `SELECT p.degree, p.branch_code, COUNT(al.log_id) as visit_count 
          FROM attendance_log al 
          JOIN users u ON al.user_id = u.user_id 
          JOIN programs p ON u.program_id = p.program_id 
          WHERE al.log_date = ? AND u.user_type = 'student' 
-         GROUP BY p.branch_code
-         ORDER BY p.branch_code`, 
+         GROUP BY p.degree, p.branch_code
+         ORDER BY p.degree, p.branch_code`, 
         [today]
     );
-    return counts;
+    
+    // Process the flat list into a nested object
+    const groupedCounts = {};
+    for (const row of flatCounts) {
+        if (!groupedCounts[row.degree]) {
+            groupedCounts[row.degree] = [];
+        }
+        groupedCounts[row.degree].push({
+            branch_code: row.branch_code,
+            visit_count: row.visit_count
+        });
+    }
+    return groupedCounts;
 }
 
 try {
@@ -129,7 +141,7 @@ app.get('/', async (req, res) => {
         res.render('dashboard', { logs: todaysLog, counts: counts });
     } catch (error) {
         console.error("Dashboard load error:", error);
-        res.render('dashboard', { logs: [], counts: [] });
+        res.render('dashboard', { logs: [], counts: {} });
     }
 });
 
