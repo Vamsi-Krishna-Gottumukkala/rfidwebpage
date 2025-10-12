@@ -7,25 +7,52 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: system-ui, sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; padding: 2em; }
-        .container { max-width: 800px; margin: auto; }
-        h1, h2 { color: #000; }
+        .container { max-width: 90%; margin: auto; } /* Increased max-width for the new layout */
+        h1, h2, h3 { color: #000; }
         nav { margin-bottom: 2em; background: white; padding: 1em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-around; }
         nav a { text-decoration: none; font-weight: bold; color: #0866ff; font-size: 1.1em; }
         .panel { background: white; padding: 1.5em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2em; }
-        #live-log-list { list-style-type: none; padding: 0; margin: 0; min-height: 100px; }
-        #live-log-list li { padding: 1.2em; border-bottom: 1px solid #ddd; font-size: 1.2em; text-align: center; }
+        #live-log-list { list-style-type: none; padding: 0; margin: 0; min-height: 100px; text-align: center;}
+        #live-log-list li { padding: 1.2em; border-bottom: 1px solid #ddd; font-size: 1.2em; }
         .log-login { color: #31a24c; }
         .log-logout { color: #555; }
         .log-error, .log-ignored { color: #f02849; font-weight: bold; }
         table { width: 100%; border-collapse: collapse; margin-top: 1em; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background-color: #f2f2f2; font-weight: bold; }
+        
+        /* NEW: Styles for the 3-column layout */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr; /* Sides are 1 part, center is 2 parts */
+            gap: 2em;
+            align-items: start;
+        }
+
+        .side-column h2, .center-column h2 {
+            text-align: center;
+            margin-top: 0;
+        }
+        
+        .chart-wrapper {
+            margin-bottom: 2em;
+        }
+        .chart-wrapper h3 {
+            text-align: center;
+            margin-bottom: 1em;
+        }
         .chart-container {
             position: relative;
             margin: auto;
-            height: 40vh;
-            width: 80vw;
-            max-width: 450px;
+            height: 250px; /* Adjusted height for side columns */
+            width: 100%;
+        }
+
+        /* Responsive stacking for smaller screens */
+        @media (max-width: 1024px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -42,28 +69,64 @@
             </ul>
         </div>
         
-        <div class="panel">
-            <h2>Student Visits by Branch Today</h2>
-            <div class="chart-container">
-                <canvas id="branchVisitChart"></canvas>
+        <!-- MODIFIED: Main content is now a 3-column grid -->
+        <div class="main-layout">
+            
+            <!-- Left Column: Undergraduate Charts -->
+            <div class="side-column">
+                <div class="panel">
+                    <h2>Undergraduate</h2>
+                    <% const ug_degrees = ['B.Tech', 'BBA', 'BCA']; %>
+                    <% Object.keys(counts).forEach(degree => { %>
+                        <% if (ug_degrees.includes(degree)) { %>
+                            <div class="chart-wrapper">
+                                <h3><%= degree %></h3>
+                                <div class="chart-container">
+                                    <canvas id="chart-<%= degree.toLowerCase() %>"></canvas>
+                                </div>
+                            </div>
+                        <% } %>
+                    <% }); %>
+                </div>
             </div>
-        </div>
-        
-        <div class="panel">
-            <h2>Today's Attendance Log</h2>
-            <table id="attendance-table">
-                <thead><tr><th>User ID</th><th>Name</th><th>Login</th><th>Logout</th></tr></thead>
-                <tbody>
-                  <% logs.forEach(log => { %>
-                      <tr>
-                          <td><%= log.user_id %></td>
-                          <td><%= log.user_name %></td>
-                          <td><%= log.login_time %></td>
-                          <td><%= log.logout_time || '---' %></td>
-                      </tr>
-                  <% }); %>
-                </tbody>
-            </table>
+
+            <!-- Center Column: Attendance Log -->
+            <div class="center-column">
+                <div class="panel">
+                    <h2>Today's Attendance Log</h2>
+                    <table id="attendance-table">
+                        <thead><tr><th>User ID</th><th>Name</th><th>Login</th><th>Logout</th></tr></thead>
+                        <tbody>
+                          <% logs.forEach(log => { %>
+                              <tr>
+                                  <td><%= log.user_id %></td>
+                                  <td><%= log.user_name %></td>
+                                  <td><%= log.login_time %></td>
+                                  <td><%= log.logout_time || '---' %></td>
+                              </tr>
+                          <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right Column: Postgraduate Charts -->
+            <div class="side-column">
+                <div class="panel">
+                    <h2>Postgraduate</h2>
+                     <% const pg_degrees = ['M.Tech', 'MBA', 'MCA']; %>
+                    <% Object.keys(counts).forEach(degree => { %>
+                        <% if (pg_degrees.includes(degree)) { %>
+                            <div class="chart-wrapper">
+                                <h3><%= degree %></h3>
+                                <div class="chart-container">
+                                    <canvas id="chart-<%= degree.toLowerCase() %>"></canvas>
+                                </div>
+                            </div>
+                        <% } %>
+                    <% }); %>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -73,43 +136,54 @@
         const attendanceTableBody = document.getElementById('attendance-table').getElementsByTagName('tbody')[0];
         
         const initialCounts = <%- JSON.stringify(counts) %>;
-        const ctx = document.getElementById('branchVisitChart').getContext('2d');
-        
-        const branchChart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                // MODIFIED: Use branch_code for the labels
-                labels: initialCounts.map(c => c.branch_code),
+        const chartInstances = {};
+
+        function createOrUpdateChart(degree, branches) {
+            const chartId = `chart-${degree.toLowerCase()}`;
+            const ctx = document.getElementById(chartId);
+            if (!ctx) return;
+
+            const chartData = {
+                labels: branches.map(b => b.branch_code),
                 datasets: [{
                     label: 'Visits',
-                    data: initialCounts.map(c => c.visit_count),
+                    data: branches.map(b => b.visit_count),
                     backgroundColor: [
                         '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
                         '#FF9F40', '#C9CBCF', '#7ACBF5', '#F57A9A', '#B2F57A'
                     ],
                     hoverOffset: 4
                 }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'right',
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.label || '';
-                                const value = context.parsed || 0;
-                                return ` ${label}: ${value} student(s)`;
+            };
+
+            if (chartInstances[degree]) {
+                chartInstances[degree].data.labels = chartData.labels;
+                chartInstances[degree].data.datasets[0].data = chartData.datasets[0].data;
+                chartInstances[degree].update();
+            } else {
+                chartInstances[degree] = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: chartData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top' },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => ` ${context.label}: ${context.parsed || 0} student(s)`
+                                }
                             }
                         }
                     }
-                }
+                });
             }
-        });
+        }
 
+        for (const degree in initialCounts) {
+            createOrUpdateChart(degree, initialCounts[degree]);
+        }
+        
         socket.on('scan_event', function(data) {
             const logItem = document.createElement('li');
             let message = '';
@@ -117,17 +191,14 @@
             if (data.status === 'LOGIN') {
                 logItem.className = 'log-login';
                 message = `Welcome, <strong>${data.user_name}</strong>`;
-                
                 const newRow = attendanceTableBody.insertRow(0);
                 newRow.insertCell(0).innerHTML = data.user_id;
                 newRow.insertCell(1).innerHTML = data.user_name;
                 newRow.insertCell(2).innerHTML = data.time;
                 newRow.insertCell(3).innerHTML = '---';
-
             } else if (data.status === 'LOGOUT') {
                 logItem.className = 'log-logout';
                 message = `Thank You, <strong>${data.user_name}</strong>`;
-
                 const rows = attendanceTableBody.getElementsByTagName('tr');
                 for (let i = 0; i < rows.length; i++) {
                     const userIdCell = rows[i].cells[0];
@@ -152,11 +223,10 @@
             }
         });
 
-        // MODIFIED: Update the chart using branch_code
         socket.on('counts_update', function(newCounts) {
-            branchChart.data.labels = newCounts.map(c => c.branch_code);
-            branchChart.data.datasets[0].data = newCounts.map(c => c.visit_count);
-            branchChart.update();
+            for (const degree in newCounts) {
+                createOrUpdateChart(degree, newCounts[degree]);
+            }
         });
     </script>
 </body>
