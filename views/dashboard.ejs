@@ -6,78 +6,119 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: system-ui, sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; padding: 2em; }
-        .container { max-width: 90%; margin: auto; } /* Increased max-width for the new layout */
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; }
+        .container { max-width: 90%; margin: auto; padding: 2em; }
         h1, h2, h3 { color: #000; }
-        nav { margin-bottom: 2em; background: white; padding: 1em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-around; }
-        nav a { text-decoration: none; font-weight: bold; color: #0866ff; font-size: 1.1em; }
+
+        .navbar-container { width: 100%; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 0.75em 2em; box-sizing: border-box; margin-bottom: 2em; }
+        nav { display: flex; justify-content: space-between; align-items: center; gap: 1em; }
+        .nav-brand { display: flex; align-items: center; gap: 1em; font-weight: bold; color: #1c1e21; }
+        .nav-logo { height: 50px; width: auto; }
+        .nav-brand-name { font-size: 1.2em; }
+        .nav-links { display: flex; align-items: center; gap: 2em; font-size: 1.1em; }
+        nav a { text-decoration: none; font-weight: bold; color: #0866ff; }
+        .logout-btn { background-color: #f02849; color: white; padding: 0.5em 1em; border-radius: 6px; text-decoration: none; transition: background-color 0.2s; }
+        @media (max-width: 900px) { .nav-brand-name { display: none; } .nav-links { gap: 1em; } }
+
         .panel { background: white; padding: 1.5em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2em; }
-        #live-log-list { list-style-type: none; padding: 0; margin: 0; min-height: 100px; text-align: center;}
-        #live-log-list li { padding: 1.2em; border-bottom: 1px solid #ddd; font-size: 1.2em; }
-        .log-login { color: #31a24c; }
-        .log-logout { color: #555; }
-        .log-error, .log-ignored { color: #f02849; font-weight: bold; }
+        
+        #welcome-card-container {
+            min-height: 120px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2em;
+            color: #65676b;
+            overflow: hidden;
+        }
+        .user-card {
+            display: flex;
+            align-items: center;
+            gap: 1.2em;
+            background-color: #fff;
+            padding: 1em;
+            border-radius: 12px;
+            animation: slideIn 0.5s ease-out forwards;
+        }
+        .profile-pic {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background-color: #e4e6eb;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 3px solid #fff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .user-details h2 {
+            margin: 0 0 0.25em 0;
+            font-size: 1.3em;
+            color: #1c1e21;
+        }
+        .user-details p {
+            margin: 0.25em 0;
+            font-size: 0.9em;
+            color: #65676b;
+        }
+        .status-banner {
+            padding: 0.3em 0.7em;
+            border-radius: 6px;
+            color: white;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 0.7em;
+            font-size: 0.75em;
+        }
+        .status-login { background-color: #31a24c; }
+        .status-logout { background-color: #65676b; }
+        .status-error { background-color: #f02849; }
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
         table { width: 100%; border-collapse: collapse; margin-top: 1em; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background-color: #f2f2f2; font-weight: bold; }
         
-        /* NEW: Styles for the 3-column layout */
-        .main-layout {
-            display: grid;
-            grid-template-columns: 1fr 2fr 1fr; /* Sides are 1 part, center is 2 parts */
-            gap: 2em;
-            align-items: start;
-        }
-
-        .side-column h2, .center-column h2 {
-            text-align: center;
-            margin-top: 0;
-        }
-        
-        .chart-wrapper {
-            margin-bottom: 2em;
-        }
-        .chart-wrapper h3 {
-            text-align: center;
-            margin-bottom: 1em;
-        }
-        .chart-container {
-            position: relative;
-            margin: auto;
-            height: 250px; /* Adjusted height for side columns */
-            width: 100%;
-        }
-
-        /* Responsive stacking for smaller screens */
-        @media (max-width: 1024px) {
-            .main-layout {
-                grid-template-columns: 1fr;
-            }
-        }
+        .main-layout { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 2em; align-items: start; }
+        .side-column h2, .center-column h2 { text-align: center; margin-top: 0; }
+        .chart-wrapper { margin-bottom: 2em; }
+        .chart-wrapper h3 { text-align: center; margin-bottom: 1em; }
+        .chart-container { position: relative; margin: auto; height: 250px; width: 100%; }
+        @media (max-width: 1024px) { .main-layout { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="navbar-container">
         <nav>
-            <a href="/register">Register New Card &rarr;</a>
-            <a href="/manage-users">Manage Users &rarr;</a>
+            <div class="nav-brand">
+                <img src="/assets/gvplogo.png" alt="College Logo" class="nav-logo">
+                <span class="nav-brand-name">Gayatri Vidya Parishad College for Degree and P.G. Courses (A)</span>
+            </div>
+            <div class="nav-links">
+                <a href="/reports">Reports</a>
+                <a href="/manage-users">Manage Users</a>
+                <a href="/register">Register Card</a>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
         </nav>
-        
+    </div>
+
+    <div class="container">
         <div class="panel">
-            <ul id="live-log-list">
-                <li style="color: #65676b; font-size: 1.2em;">Please scan your card</li>
-            </ul>
+            <div id="welcome-card-container">
+                Please scan your card
+            </div>
         </div>
         
-        <!-- MODIFIED: Main content is now a 3-column grid -->
         <div class="main-layout">
-            
-            <!-- Left Column: Undergraduate Charts -->
             <div class="side-column">
                 <div class="panel">
                     <h2>Undergraduate</h2>
                     <% const ug_degrees = ['B.Tech', 'BBA', 'BCA']; %>
-                    <% Object.keys(counts).forEach(degree => { %>
+                    <% Object.keys(counts).sort().forEach(degree => { %>
                         <% if (ug_degrees.includes(degree)) { %>
                             <div class="chart-wrapper">
                                 <h3><%= degree %></h3>
@@ -90,7 +131,6 @@
                 </div>
             </div>
 
-            <!-- Center Column: Attendance Log -->
             <div class="center-column">
                 <div class="panel">
                     <h2>Today's Attendance Log</h2>
@@ -110,12 +150,11 @@
                 </div>
             </div>
 
-            <!-- Right Column: Postgraduate Charts -->
             <div class="side-column">
                 <div class="panel">
                     <h2>Postgraduate</h2>
                      <% const pg_degrees = ['M.Tech', 'MBA', 'MCA']; %>
-                    <% Object.keys(counts).forEach(degree => { %>
+                    <% Object.keys(counts).sort().forEach(degree => { %>
                         <% if (pg_degrees.includes(degree)) { %>
                             <div class="chart-wrapper">
                                 <h3><%= degree %></h3>
@@ -132,101 +171,116 @@
 
     <script>
         const socket = io();
-        const liveLogList = document.getElementById('live-log-list');
+        const welcomeContainer = document.getElementById('welcome-card-container');
         const attendanceTableBody = document.getElementById('attendance-table').getElementsByTagName('tbody')[0];
         
         const initialCounts = <%- JSON.stringify(counts) %>;
         const chartInstances = {};
+        let welcomeTimeout;
+
+        function showDefaultWelcome() {
+            welcomeContainer.innerHTML = 'Please scan your card';
+        }
+
+        socket.on('scan_event', function(data) {
+            clearTimeout(welcomeTimeout);
+            
+            let cardHtml = '';
+            
+            if (data.status === 'LOGIN' || data.status === 'LOGOUT') {
+                const details = data.details;
+                const statusClass = data.status === 'LOGIN' ? 'status-login' : 'status-logout';
+                const statusText = data.status === 'LOGIN' ? 'Welcome to the Library' : 'Thank You for Visiting';
+
+                let detailsLine1 = '';
+                let detailsLine2 = '';
+
+                if (details.user_type === 'student') {
+                    detailsLine1 = `${details.degree} - ${details.branch_code}`;
+                    detailsLine2 = `Year: ${details.year}`;
+                } else {
+                    detailsLine1 = details.designation;
+                    detailsLine2 = details.department_name;
+                }
+
+                cardHtml = `
+                    <div class="user-card">
+                        <div class="profile-pic">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1c1e21" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        </div>
+                        <div class="user-details">
+                            <h2>${details.user_name}</h2>
+                            <p>${details.user_id}</p>
+                            <p>${detailsLine1}</p>
+                            <p>${detailsLine2}</p>
+                            <div class="status-banner ${statusClass}">${statusText}</div>
+                        </div>
+                    </div>
+                `;
+                
+                if (data.status === 'LOGIN') {
+                    const newRow = attendanceTableBody.insertRow(0);
+                    newRow.insertCell(0).innerHTML = details.user_id;
+                    newRow.insertCell(1).innerHTML = details.user_name;
+                    newRow.insertCell(2).innerHTML = data.time;
+                    newRow.insertCell(3).innerHTML = '---';
+                } else {
+                    const rows = attendanceTableBody.getElementsByTagName('tr');
+                    for (let i = 0; i < rows.length; i++) {
+                        if (rows[i].cells[0].textContent == details.user_id && rows[i].cells[3].textContent === '---') {
+                            rows[i].cells[3].innerHTML = data.time;
+                            break;
+                        }
+                    }
+                }
+
+            } else { 
+                let message = 'An error occurred.';
+                if (data.status === 'UNREGISTERED') message = '⚠️ Card not recognized. Please register.';
+                if (data.status === 'IGNORED') message = `🚫 ${data.message}`;
+
+                // MODIFIED: Added color:white to the inline style to ensure text is white
+                cardHtml = `<div class="user-card status-error" style="font-size: 1em; padding: 1.2em; color: white;">${message}</div>`;
+            }
+
+            welcomeContainer.innerHTML = cardHtml;
+            welcomeTimeout = setTimeout(showDefaultWelcome, 7000);
+        });
+
 
         function createOrUpdateChart(degree, branches) {
             const chartId = `chart-${degree.toLowerCase()}`;
             const ctx = document.getElementById(chartId);
             if (!ctx) return;
-
             const chartData = {
                 labels: branches.map(b => b.branch_code),
                 datasets: [{
                     label: 'Visits',
                     data: branches.map(b => b.visit_count),
-                    backgroundColor: [
-                        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
-                        '#FF9F40', '#C9CBCF', '#7ACBF5', '#F57A9A', '#B2F57A'
-                    ],
+                    backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#7ACBF5', '#F57A9A', '#B2F57A'],
                     hoverOffset: 4
                 }]
             };
-
             if (chartInstances[degree]) {
                 chartInstances[degree].data.labels = chartData.labels;
                 chartInstances[degree].data.datasets[0].data = chartData.datasets[0].data;
                 chartInstances[degree].update();
             } else {
                 chartInstances[degree] = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: chartData,
+                    type: 'doughnut', data: chartData,
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
+                        responsive: true, maintainAspectRatio: false,
                         plugins: {
                             legend: { position: 'top' },
-                            tooltip: {
-                                callbacks: {
-                                    label: (context) => ` ${context.label}: ${context.parsed || 0} student(s)`
-                                }
-                            }
+                            tooltip: { callbacks: { label: (context) => ` ${context.label}: ${context.parsed || 0} student(s)` } }
                         }
                     }
                 });
             }
         }
-
-        for (const degree in initialCounts) {
-            createOrUpdateChart(degree, initialCounts[degree]);
-        }
-        
-        socket.on('scan_event', function(data) {
-            const logItem = document.createElement('li');
-            let message = '';
-            
-            if (data.status === 'LOGIN') {
-                logItem.className = 'log-login';
-                message = `Welcome, <strong>${data.user_name}</strong>`;
-                const newRow = attendanceTableBody.insertRow(0);
-                newRow.insertCell(0).innerHTML = data.user_id;
-                newRow.insertCell(1).innerHTML = data.user_name;
-                newRow.insertCell(2).innerHTML = data.time;
-                newRow.insertCell(3).innerHTML = '---';
-            } else if (data.status === 'LOGOUT') {
-                logItem.className = 'log-logout';
-                message = `Thank You, <strong>${data.user_name}</strong>`;
-                const rows = attendanceTableBody.getElementsByTagName('tr');
-                for (let i = 0; i < rows.length; i++) {
-                    const userIdCell = rows[i].cells[0];
-                    const logoutCell = rows[i].cells[3];
-                    if (userIdCell.textContent == data.user_id && logoutCell.textContent === '---') {
-                        logoutCell.innerHTML = data.time;
-                        break;
-                    }
-                }
-            } else if (data.status === 'UNREGISTERED' || data.status === 'NO_DETAILS') {
-                logItem.className = 'log-error';
-                message = `⚠️ Card not recognized. Please register.`;
-            } else if (data.status === 'IGNORED') {
-                logItem.className = 'log-error';
-                message = `🚫 ${data.message}`;
-            }
-
-            if (message) {
-                liveLogList.innerHTML = '';
-                logItem.innerHTML = message;
-                liveLogList.prepend(logItem);
-            }
-        });
-
+        for (const degree in initialCounts) { createOrUpdateChart(degree, initialCounts[degree]); }
         socket.on('counts_update', function(newCounts) {
-            for (const degree in newCounts) {
-                createOrUpdateChart(degree, newCounts[degree]);
-            }
+            for (const degree in newCounts) { createOrUpdateChart(degree, newCounts[degree]); }
         });
     </script>
 </body>
