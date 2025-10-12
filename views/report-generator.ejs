@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Generate <%= userType.charAt(0).toUpperCase() + userType.slice(1) %> Report</title>
+    <style>
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; }
+        .container { max-width: 1000px; margin: auto; padding: 2em; }
+        h1, h2 { color: #000; }
+        .navbar-container { width: 100%; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 0.75em 2em; box-sizing: border-box; margin-bottom: 2em; }
+        nav { display: flex; justify-content: space-between; align-items: center; gap: 1em; }
+        .nav-brand { display: flex; align-items: center; gap: 1em; font-weight: bold; color: #1c1e21; }
+        .nav-logo { height: 50px; width: auto; }
+        .nav-brand-name { font-size: 1.2em; }
+        .nav-links { display: flex; align-items: center; gap: 2em; font-size: 1.1em; }
+        nav a { text-decoration: none; font-weight: bold; color: #0866ff; }
+        .logout-btn { background-color: #f02849; color: white; padding: 0.5em 1em; border-radius: 6px; text-decoration: none; }
+        @media (max-width: 900px) { .nav-brand-name { display: none; } .nav-links { gap: 1em; } }
+
+        .panel { background: white; padding: 2em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2em; }
+        
+        /* NEW: Styles for date preset buttons */
+        .date-presets {
+            display: flex;
+            gap: 1em;
+            margin-bottom: 1.5em;
+            flex-wrap: wrap;
+        }
+        .preset-btn {
+            background-color: #e4e6eb;
+            color: #1c1e21;
+            border: 1px solid #ccc;
+            font-weight: bold;
+        }
+        .preset-btn:hover {
+            background-color: #d8dbdf;
+        }
+
+        .form-container { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5em; align-items: end; margin-bottom: 2em; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { font-weight: bold; margin-bottom: 0.5em; }
+        .form-group input { padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
+        button { padding: 0.8em 1.5em; color: white; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; }
+        .btn-preview { background-color: #0866ff; }
+        .btn-download { background-color: #31a24c; }
+        .results-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f0f2f5; padding-bottom: 1em; flex-wrap: wrap; }
+        
+        /* NEW: Styles for the detailed count display */
+        .count-display { 
+            font-size: 1.1em;
+            display: flex;
+            gap: 1.5em;
+            flex-wrap: wrap;
+        }
+        .count-item {
+            background-color: #f0f2f5;
+            padding: 0.5em 1em;
+            border-radius: 6px;
+        }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        .back-link { font-weight: bold; color: #65676b; text-decoration: none; display: inline-block; margin-bottom: 1.5em; }
+    </style>
+</head>
+<body>
+    <div class="navbar-container">
+        <nav>
+            <div class="nav-brand">
+                <img src="/assets/gvplogo.png" alt="College Logo" class="nav-logo">
+                <span class="nav-brand-name">Gayatri Vidya Parishad College for Degree and P.G. Courses (A)</span>
+            </div>
+            <div class="nav-links">
+                <a href="/dashboard">Live Dashboard</a>
+                <a href="/manage-users">Manage Users</a>
+                <a href="/register">Register Card</a>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+        </nav>
+    </div>
+
+    <div class="container">
+        <a href="/reports" class="back-link">&larr; Back to Report Selection</a>
+        <div class="panel">
+            <h1><%= userType.charAt(0).toUpperCase() + userType.slice(1) %> Attendance Report</h1>
+            <form action="/reports/preview" method="POST">
+                <input type="hidden" name="user_type" value="<%= userType %>">
+
+                <!-- NEW: Date Preset Buttons -->
+                <div class="date-presets">
+                    <button type="button" class="preset-btn" id="todayBtn">Today</button>
+                    <button type="button" class="preset-btn" id="yesterdayBtn">Yesterday</button>
+                    <button type="button" class="preset-btn" id="thisMonthBtn">This Month</button>
+                    <button type="button" class="preset-btn" id="lastMonthBtn">Last Month</button>
+                </div>
+
+                <div class="form-container">
+                    <div class="form-group">
+                        <label for="start_date">Start Date:</label>
+                        <input type="date" id="start_date" name="start_date" value="<%= filters ? filters.start_date : '' %>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="end_date">End Date:</label>
+                        <input type="date" id="end_date" name="end_date" value="<%= filters ? filters.end_date : '' %>" required>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn-preview">Preview Report</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <% if (reportData) { %>
+            <div class="panel">
+                <div class="results-header">
+                    <h2>Report Preview</h2>
+                    <!-- MODIFIED: Detailed visit count display -->
+                    <div class="count-display">
+                        <% visitCounts.forEach(item => { %>
+                            <div class="count-item">
+                                <strong><%= item.degree || item.group_name %>:</strong> <%= item.count %>
+                            </div>
+                        <% }); %>
+                        <% if (visitCounts.length === 0) { %>
+                            <span>No visits found in this date range.</span>
+                        <% } %>
+                    </div>
+                </div>
+                <form action="/reports/download" method="POST" style="margin-top: 1.5em;">
+                    <input type="hidden" name="user_type" value="<%= filters.user_type %>">
+                    <input type="hidden" name="start_date" value="<%= filters.start_date %>">
+                    <input type="hidden" name="end_date" value="<%= filters.end_date %>">
+                    <button type="submit" class="btn-download">Download as Excel</button>
+                </form>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>User ID</th>
+                            <th>Name</th>
+                            <th><%= userType === 'student' ? 'Branch' : 'Department' %></th>
+                            <th>Date</th>
+                            <th>Login Time</th>
+                            <th>Logout Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% reportData.forEach(row => { %>
+                            <tr>
+                                <td><%= row.user_id %></td>
+                                <td><%= row.user_name %></td>
+                                <td><%= row.group_name %></td>
+                                <td><%= new Date(row.log_date).toLocaleDateString() %></td>
+                                <td><%= row.login_time %></td>
+                                <td><%= row.logout_time || 'N/A' %></td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        <% } %>
+    </div>
+    
+    <!-- NEW: Client-side script for date preset buttons -->
+    <script>
+        const startDateInput = document.getElementById('start_date');
+        const endDateInput = document.getElementById('end_date');
+
+        function formatDate(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        document.getElementById('todayBtn').addEventListener('click', () => {
+            const today = new Date();
+            startDateInput.value = formatDate(today);
+            endDateInput.value = formatDate(today);
+        });
+
+        document.getElementById('yesterdayBtn').addEventListener('click', () => {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            startDateInput.value = formatDate(yesterday);
+            endDateInput.value = formatDate(yesterday);
+        });
+
+        document.getElementById('thisMonthBtn').addEventListener('click', () => {
+            const now = new Date();
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            startDateInput.value = formatDate(firstDay);
+            endDateInput.value = formatDate(lastDay);
+        });
+
+        document.getElementById('lastMonthBtn').addEventListener('click', () => {
+            const now = new Date();
+            const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+            startDateInput.value = formatDate(firstDay);
+            endDateInput.value = formatDate(lastDay);
+        });
+    </script>
+</body>
+</html>
+
