@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Live Library Dashboard</title>
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: system-ui, sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; padding: 2em; }
         .container { max-width: 800px; margin: auto; }
@@ -19,15 +20,17 @@
         table { width: 100%; border-collapse: collapse; margin-top: 1em; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background-color: #f2f2f2; font-weight: bold; }
-        .counter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1em; text-align: center; }
-        .counter-grid div { padding: 1em; }
-        .counter-grid h3 { margin: 0 0 0.5em 0; color: #65676b; }
-        .counter-grid span { font-size: 2.5em; font-weight: bold; color: #1c1e21; }
+        .chart-container {
+            position: relative;
+            margin: auto;
+            height: 40vh;
+            width: 80vw;
+            max-width: 450px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- MODIFIED: Navigation now points to the single 'manage-users' page -->
         <nav>
             <a href="/register">Register New Card &rarr;</a>
             <a href="/manage-users">Manage Users &rarr;</a>
@@ -40,17 +43,9 @@
         </div>
         
         <div class="panel">
-            <h2>Branch Visits Today</h2>
-            <div class="counter-grid">
-                <% counts.forEach(count => { %>
-                    <div>
-                        <h3><%= count.branch_name %></h3>
-                        <span id="count-<%= count.branch_name.toLowerCase().replace(/[^a-z0-9]/g, '') %>"><%= count.visit_count %></span>
-                    </div>
-                <% }); %>
-                <% if (counts.length === 0) { %>
-                    <p>No student visits recorded yet today.</p>
-                <% } %>
+            <h2>Student Visits by Branch Today</h2>
+            <div class="chart-container">
+                <canvas id="branchVisitChart"></canvas>
             </div>
         </div>
         
@@ -76,6 +71,44 @@
         const socket = io();
         const liveLogList = document.getElementById('live-log-list');
         const attendanceTableBody = document.getElementById('attendance-table').getElementsByTagName('tbody')[0];
+        
+        const initialCounts = <%- JSON.stringify(counts) %>;
+        const ctx = document.getElementById('branchVisitChart').getContext('2d');
+        
+        const branchChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                // MODIFIED: Use branch_code for the labels
+                labels: initialCounts.map(c => c.branch_code),
+                datasets: [{
+                    label: 'Visits',
+                    data: initialCounts.map(c => c.visit_count),
+                    backgroundColor: [
+                        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                        '#FF9F40', '#C9CBCF', '#7ACBF5', '#F57A9A', '#B2F57A'
+                    ],
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                return ` ${label}: ${value} student(s)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
 
         socket.on('scan_event', function(data) {
             const logItem = document.createElement('li');
@@ -84,14 +117,17 @@
             if (data.status === 'LOGIN') {
                 logItem.className = 'log-login';
                 message = `Welcome, <strong>${data.user_name}</strong>`;
+                
                 const newRow = attendanceTableBody.insertRow(0);
                 newRow.insertCell(0).innerHTML = data.user_id;
                 newRow.insertCell(1).innerHTML = data.user_name;
                 newRow.insertCell(2).innerHTML = data.time;
                 newRow.insertCell(3).innerHTML = '---';
+
             } else if (data.status === 'LOGOUT') {
                 logItem.className = 'log-logout';
                 message = `Thank You, <strong>${data.user_name}</strong>`;
+
                 const rows = attendanceTableBody.getElementsByTagName('tr');
                 for (let i = 0; i < rows.length; i++) {
                     const userIdCell = rows[i].cells[0];
@@ -101,13 +137,12 @@
                         break;
                     }
                 }
-            } else if (data.status === 'IGNORED') {
-                logItem.className = 'log-ignored';
-                message = `🚫 ${data.message}`;
-            }
-            else {
+            } else if (data.status === 'UNREGISTERED' || data.status === 'NO_DETAILS') {
                 logItem.className = 'log-error';
                 message = `⚠️ Card not recognized. Please register.`;
+            } else if (data.status === 'IGNORED') {
+                logItem.className = 'log-error';
+                message = `🚫 ${data.message}`;
             }
 
             if (message) {
@@ -117,14 +152,11 @@
             }
         });
 
-        socket.on('counts_update', function(counts) {
-            counts.forEach(count => {
-                const spanId = `count-${count.branch_name.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
-                const spanElement = document.getElementById(spanId);
-                if (spanElement) {
-                    spanElement.textContent = count.visit_count;
-                }
-            });
+        // MODIFIED: Update the chart using branch_code
+        socket.on('counts_update', function(newCounts) {
+            branchChart.data.labels = newCounts.map(c => c.branch_code);
+            branchChart.data.datasets[0].data = newCounts.map(c => c.visit_count);
+            branchChart.update();
         });
     </script>
 </body>
