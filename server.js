@@ -33,8 +33,10 @@ const dbPool = mysql.createPool({
 
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
 const upload = multer({ dest: 'uploads/' });
 
+// MODIFIED: This function now fetches all user details for the new card display
 async function handleCardScan(uid) {
     const now = new Date();
     const currentDate = format(now, 'yyyy-MM-dd');
@@ -49,14 +51,27 @@ async function handleCardScan(uid) {
         }
         
         const user_id = rfidRows[0].user_id;
-        eventData.user_id = user_id;
-        const [userRows] = await dbPool.query("SELECT user_name FROM users WHERE user_id = ?", [user_id]);
+
+        // NEW: More detailed query to get all info for the card
+        const [userRows] = await dbPool.query(`
+            SELECT 
+                u.user_id, u.user_name, u.user_type, u.year, u.designation,
+                p.degree, p.branch_name, p.branch_code,
+                d.department_name
+            FROM users u
+            LEFT JOIN programs p ON u.program_id = p.program_id
+            LEFT JOIN departments d ON u.department_id = d.department_id
+            WHERE u.user_id = ?`, 
+            [user_id]
+        );
+
         if (userRows.length === 0) {
             eventData.status = 'NO_DETAILS';
             return io.emit('scan_event', eventData);
         }
         
-        eventData.user_name = userRows[0].user_name;
+        eventData.details = userRows[0]; // Send the whole details object
+
         const [openLogins] = await dbPool.query("SELECT log_id FROM attendance_log WHERE user_id = ? AND log_date = ? AND logout_time IS NULL LIMIT 1", [user_id, currentDate]);
 
         if (openLogins.length > 0) {
@@ -79,7 +94,6 @@ async function handleCardScan(uid) {
     }
 }
 
-// MODIFIED: This function now groups counts by degree
 async function getTodayBranchCounts() {
     const today = format(new Date(), 'yyyy-MM-dd');
     const [flatCounts] = await dbPool.query(
@@ -93,7 +107,6 @@ async function getTodayBranchCounts() {
         [today]
     );
     
-    // Process the flat list into a nested object
     const groupedCounts = {};
     for (const row of flatCounts) {
         if (!groupedCounts[row.degree]) {
@@ -133,7 +146,116 @@ try {
     console.error(`Could not connect to Arduino on port ${ARDUINO_PORT}.`);
 }
 
-app.get('/', async (req, res) => {
+app.get('/', (req, res) => {
+    res.redirect('/reports');
+});
+
+app.get('/reports', (req, res) => {
+    res.render('reports-landing');
+});
+
+app.get('/reports/student', (req, res) => {
+    res.render('report-generator', {
+        userType: 'student',
+        reportData: null,
+        filters: null, 
+        error: req.query.error
+    });
+});
+
+app.get('/reports/faculty', (req, res) => {
+    res.render('report-generator', {
+        userType: 'faculty',
+        reportData: null,
+        filters: null,
+        error: req.query.error
+    });
+});
+
+
+app.post('/reports/preview', async (req, res) => {
+    const { user_type, start_date, end_date } = req.body;
+    let detailQuery, countQuery;
+    let params = [start_date, end_date];
+
+    if (user_type === 'student') {
+        detailQuery = `
+            SELECT al.user_id, u.user_name, p.branch_name as group_name, DATE_FORMAT(al.log_date, '%Y-%m-%d') as log_date, al.login_time, al.logout_time
+            FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN programs p ON u.program_id = p.program_id
+            WHERE u.user_type = 'student' AND al.log_date BETWEEN ? AND ? ORDER BY al.log_date, al.login_time;`;
+        
+        countQuery = `
+            SELECT p.degree, COUNT(al.log_id) as count
+            FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN programs p ON u.program_id = p.program_id
+            WHERE u.user_type = 'student' AND al.log_date BETWEEN ? AND ?
+            GROUP BY p.degree ORDER BY p.degree;`;
+    } else { // faculty
+        detailQuery = `
+            SELECT al.user_id, u.user_name, d.department_name as group_name, DATE_FORMAT(al.log_date, '%Y-%m-%d') as log_date, al.login_time, al.logout_time
+            FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN departments d ON u.department_id = d.department_id
+            WHERE u.user_type = 'faculty' AND al.log_date BETWEEN ? AND ? ORDER BY al.log_date, al.login_time;`;
+        
+        countQuery = `
+            SELECT d.department_name as group_name, COUNT(al.log_id) as count
+            FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN departments d ON u.department_id = d.department_id
+            WHERE u.user_type = 'faculty' AND al.log_date BETWEEN ? AND ?
+            GROUP BY d.department_name ORDER BY d.department_name;`;
+    }
+    try {
+        const [reportData] = await dbPool.query(detailQuery, params);
+        const [visitCounts] = await dbPool.query(countQuery, params);
+        
+        res.render('report-generator', {
+            userType: user_type,
+            reportData: reportData,
+            visitCounts: visitCounts,
+            filters: req.body
+        });
+    } catch (error) {
+        console.error("Report preview error:", error);
+        res.redirect(`/reports/${user_type}?error=Failed to generate report.`);
+    }
+});
+
+app.post('/reports/download', async (req, res) => {
+    const { user_type, start_date, end_date } = req.body;
+    let query;
+    let params = [start_date, end_date];
+    if (user_type === 'student') {
+        query = `
+            SELECT al.user_id, u.user_name, p.branch_name as group_name, DATE_FORMAT(al.log_date, '%Y-%m-%d') as log_date, al.login_time, al.logout_time
+            FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN programs p ON u.program_id = p.program_id
+            WHERE u.user_type = 'student' AND al.log_date BETWEEN ? AND ? ORDER BY al.log_date, al.login_time;`;
+    } else {
+        query = `
+            SELECT al.user_id, u.user_name, d.department_name as group_name, DATE_FORMAT(al.log_date, '%Y-%m-%d') as log_date, al.login_time, al.logout_time
+            FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN departments d ON u.department_id = d.department_id
+            WHERE u.user_type = 'faculty' AND al.log_date BETWEEN ? AND ? ORDER BY al.log_date, al.login_time;`;
+    }
+    try {
+        const [reportData] = await dbPool.query(query, params);
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Attendance Report');
+        worksheet.columns = [
+            { header: 'User ID', key: 'user_id', width: 20 },
+            { header: 'Name', key: 'user_name', width: 30 },
+            { header: (user_type === 'student' ? 'Branch' : 'Department'), key: 'group_name', width: 30 },
+            { header: 'Date', key: 'log_date', width: 15 },
+            { header: 'Login Time', key: 'login_time', width: 15 },
+            { header: 'Logout Time', key: 'logout_time', width: 15 }
+        ];
+        reportData.forEach(row => { worksheet.addRow(row); });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="Attendance_Report_${user_type}_${start_date}_to_${end_date}.xlsx"`);
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        console.error("Excel download error:", error);
+        res.status(500).send("Failed to generate Excel file.");
+    }
+});
+
+app.get('/dashboard', async (req, res) => {
     try {
         const today = format(new Date(), 'yyyy-MM-dd');
         const [todaysLog] = await dbPool.query(`SELECT al.user_id, al.login_time, al.logout_time, u.user_name FROM attendance_log al JOIN users u ON al.user_id = u.user_id WHERE al.log_date = ? ORDER BY al.login_time DESC`, [today]);
@@ -340,7 +462,7 @@ cron.schedule('5 18 * * *', () => {
 });
 
 server.listen(PORT, () => {
-    console.log(`🚀 Server running! Dashboard is at http://localhost:${PORT}`);
+    console.log(`🚀 Server running! Reports page is at http://localhost:${PORT}`);
     console.log('Running startup cleanup job for any missed logouts from previous days...');
     cleanupPreviousDays();
 });
