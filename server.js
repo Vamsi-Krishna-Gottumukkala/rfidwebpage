@@ -8,6 +8,8 @@ const { format } = require('date-fns');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const path = require('path');
+const cron = require('node-cron');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -67,7 +69,6 @@ async function handleCardScan(uid) {
             eventData.status = 'LOGIN';
             eventData.time = currentTime;
             io.emit('scan_event', eventData);
-            // We only update counts on login
             const counts = await getTodayBranchCounts();
             io.emit('counts_update', counts);
         }
@@ -78,16 +79,17 @@ async function handleCardScan(uid) {
     }
 }
 
-// MODIFIED: This query now counts every entry, not just unique users.
+// MODIFIED: Query now selects branch_code instead of branch_name
 async function getTodayBranchCounts() {
     const today = format(new Date(), 'yyyy-MM-dd');
     const [counts] = await dbPool.query(
-        `SELECT p.branch_name, COUNT(al.log_id) as visit_count 
+        `SELECT p.branch_code, COUNT(al.log_id) as visit_count 
          FROM attendance_log al 
          JOIN users u ON al.user_id = u.user_id 
          JOIN programs p ON u.program_id = p.program_id 
          WHERE al.log_date = ? AND u.user_type = 'student' 
-         GROUP BY p.branch_name`, 
+         GROUP BY p.branch_code
+         ORDER BY p.branch_code`, 
         [today]
     );
     return counts;
@@ -100,7 +102,6 @@ try {
     parser.on('data', (line) => {
         if (line.startsWith("RFID Tag UID:")) {
             const uid = line.split(":")[1].trim();
-            // MODIFIED: This block now correctly sends the "IGNORED" event.
             if (scannedRecently.has(uid)) {
                 io.emit('scan_event', {
                     uid: uid, 
@@ -120,7 +121,6 @@ try {
     console.error(`Could not connect to Arduino on port ${ARDUINO_PORT}.`);
 }
 
-// --- Page Rendering Routes (No changes below this line) ---
 app.get('/', async (req, res) => {
     try {
         const today = format(new Date(), 'yyyy-MM-dd');
@@ -149,7 +149,6 @@ app.get('/manage-users', async (req, res) => {
     }
 });
 
-// --- Form Handling Routes (No changes below this line) ---
 app.post('/add', async (req, res) => {
     const { user_id, uid } = req.body;
     if (!user_id || !uid) return res.redirect('/register?error=All fields are required.');
@@ -179,30 +178,50 @@ app.post('/upload-students-excel', upload.single('userFile'), async (req, res) =
     
     const connection = await dbPool.getConnection();
     try {
-        await connection.beginTransaction();
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.readFile(req.file.path);
         const worksheet = workbook.getWorksheet(1);
-        let count = 0;
+        
+        const studentsToInsert = [];
 
         for (let i = 2; i <= worksheet.rowCount; i++) {
             const row = worksheet.getRow(i);
-            const user_id = row.getCell(1).value, user_name = row.getCell(2).value, year = row.getCell(3).value, degree = row.getCell(4).value, branch_name = row.getCell(5).value;
+            const user_id = row.getCell(1).text;
+            const user_name = row.getCell(2).text;
+            const year = row.getCell(3).text;
+            const degree = row.getCell(4).text;
+            const branch_code = row.getCell(5).text;
             
             if (!user_id) continue;
-            const [programRows] = await connection.query('SELECT program_id FROM programs WHERE degree = ? AND branch_name = ?', [degree, branch_name]);
-            if (programRows.length === 0) throw new Error(`Program not found for ${degree} - ${branch_name}.`);
+
+            const [programRows] = await connection.query('SELECT program_id FROM programs WHERE degree = ? AND branch_code = ?', [degree, branch_code]);
+            if (programRows.length === 0) {
+                throw new Error(`Program not found for Degree '${degree}' with Branch Code '${branch_code}'.`);
+            }
             
-            await connection.query(`INSERT INTO users (user_id, user_type, user_name, program_id, year) VALUES (?, 'student', ?, ?, ?)`, [user_id, user_name, programRows[0].program_id, year]);
-            count++;
+            const program_id = programRows[0].program_id;
+            studentsToInsert.push([user_id, 'student', user_name, program_id, year]);
         }
-        await connection.commit();
-        res.redirect(`/manage-users?success=${count} students uploaded!`);
+        
+        if (studentsToInsert.length > 0) {
+            await connection.beginTransaction();
+            const sql = `INSERT INTO users (user_id, user_type, user_name, program_id, year) VALUES ?`;
+            await connection.query(sql, [studentsToInsert]);
+            await connection.commit();
+        }
+
+        res.redirect(`/manage-users?success=${studentsToInsert.length} students uploaded!`);
+
     } catch (error) {
-        await connection.rollback();
+        if (connection) await connection.rollback();
         res.redirect(`/manage-users?error=${error.message}`);
     } finally {
-        connection.release();
+        if (connection) connection.release();
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error("Error deleting temp file:", err);
+            });
+        }
     }
 });
 
@@ -222,32 +241,95 @@ app.post('/upload-faculty-excel', upload.single('userFile'), async (req, res) =>
 
     const connection = await dbPool.getConnection();
     try {
-        await connection.beginTransaction();
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.readFile(req.file.path);
         const worksheet = workbook.getWorksheet(1);
-        let count = 0;
-
+        
+        const facultyToInsert = [];
+        
         for (let i = 2; i <= worksheet.rowCount; i++) {
             const row = worksheet.getRow(i);
-            const user_id = row.getCell(1).value, user_name = row.getCell(2).value, department_name = row.getCell(3).value, designation = row.getCell(4).value;
+            const user_id = row.getCell(1).text;
+            const user_name = row.getCell(2).text;
+            const department_name = row.getCell(3).text;
+            const designation = row.getCell(4).text;
 
             if (!user_id) continue;
-            const [deptRows] = await connection.query('SELECT department_id FROM departments WHERE department_name = ?', [department_name]);
-            if (deptRows.length === 0) throw new Error(`Department not found for ${department_name}.`);
             
-            await connection.query(`INSERT INTO users (user_id, user_type, user_name, department_id, designation) VALUES (?, 'faculty', ?, ?, ?)`, [user_id, user_name, deptRows[0].department_id, designation]);
-            count++;
+            const [deptRows] = await connection.query('SELECT department_id FROM departments WHERE department_name = ?', [department_name]);
+            if (deptRows.length === 0) {
+                throw new Error(`Department not found for ${department_name}.`);
+            }
+            const department_id = deptRows[0].department_id;
+            
+            facultyToInsert.push([user_id, 'faculty', user_name, department_id, designation]);
         }
-        await connection.commit();
-        res.redirect(`/manage-users?success=${count} faculty members uploaded!`);
+
+        if (facultyToInsert.length > 0) {
+            await connection.beginTransaction();
+            const sql = `INSERT INTO users (user_id, user_type, user_name, department_id, designation) VALUES ?`;
+            await connection.query(sql, [facultyToInsert]);
+            await connection.commit();
+        }
+
+        res.redirect(`/manage-users?success=${facultyToInsert.length} faculty members uploaded!`);
+
     } catch (error) {
-        await connection.rollback();
+        if (connection) await connection.rollback();
         res.redirect(`/manage-users?error=${error.message}`);
     } finally {
-        connection.release();
+        if (connection) connection.release();
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error("Error deleting temp file:", err);
+            });
+        }
     }
 });
 
-server.listen(PORT, () => console.log(`🚀 Server running! Dashboard is at http://localhost:${PORT}`));
+async function autoLogoutCurrentDay() {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const logoutTime = '18:00:00';
+    try {
+        const [result] = await dbPool.query(
+            `UPDATE attendance_log SET logout_time = ? WHERE log_date = ? AND logout_time IS NULL`,
+            [logoutTime, today]
+        );
+        if (result.affectedRows > 0) {
+            console.log(`Auto-logged out ${result.affectedRows} users for ${today}.`);
+        }
+    } catch (error) {
+        console.error('Error during auto-logout:', error);
+    }
+}
+
+async function cleanupPreviousDays() {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const logoutTime = '18:00:00';
+    try {
+        const [result] = await dbPool.query(
+            `UPDATE attendance_log SET logout_time = ? WHERE log_date < ? AND logout_time IS NULL`,
+            [logoutTime, today]
+        );
+        if (result.affectedRows > 0) {
+            console.log(`Startup Cleanup: Logged out ${result.affectedRows} users from previous days.`);
+        }
+    } catch (error) {
+        console.error('Error during cleanup of previous days:', error);
+    }
+}
+
+cron.schedule('5 18 * * *', () => {
+    console.log('Running scheduled job: Auto-logging out users for today...');
+    autoLogoutCurrentDay();
+}, {
+    scheduled: true,
+    timezone: "Asia/Kolkata"
+});
+
+server.listen(PORT, () => {
+    console.log(`🚀 Server running! Dashboard is at http://localhost:${PORT}`);
+    console.log('Running startup cleanup job for any missed logouts from previous days...');
+    cleanupPreviousDays();
+});
 
