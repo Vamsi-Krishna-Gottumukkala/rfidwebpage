@@ -1,5 +1,3 @@
-// server.js (With name lookup and branch counting)
-
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -7,6 +5,9 @@ const mysql = require('mysql2/promise');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const { format } = require('date-fns');
+const multer = require('multer');
+const ExcelJS = require('exceljs');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -22,7 +23,7 @@ const dbPool = mysql.createPool({
     host: 'localhost',
     user: 'root',
     password: '',
-    database: 'rfid_attendance',
+    database: 'library_system',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
@@ -30,6 +31,7 @@ const dbPool = mysql.createPool({
 
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
+const upload = multer({ dest: 'uploads/' });
 
 async function handleCardScan(uid) {
     const now = new Date();
@@ -38,61 +40,57 @@ async function handleCardScan(uid) {
     let eventData = { uid: uid };
 
     try {
-        const [rfidRows] = await dbPool.query("SELECT roll_no FROM rfid_details WHERE uid = ?", [uid]);
+        const [rfidRows] = await dbPool.query("SELECT user_id FROM rfid_details WHERE uid = ?", [uid]);
         if (rfidRows.length === 0) {
             eventData.status = 'UNREGISTERED';
-            eventData.message = `Unregistered UID.`;
             return io.emit('scan_event', eventData);
         }
         
-        const roll_no = rfidRows[0].roll_no;
-        eventData.roll_no = roll_no;
-
-        // NEW: Get student name and branch from the new table
-        const [studentRows] = await dbPool.query("SELECT student_name, branch FROM students_with_branch WHERE roll_no = ?", [roll_no]);
-        if (studentRows.length === 0) {
+        const user_id = rfidRows[0].user_id;
+        eventData.user_id = user_id;
+        const [userRows] = await dbPool.query("SELECT user_name FROM users WHERE user_id = ?", [user_id]);
+        if (userRows.length === 0) {
             eventData.status = 'NO_DETAILS';
-            eventData.message = `Roll No ${roll_no} not found in student details.`;
             return io.emit('scan_event', eventData);
         }
-        const { student_name, branch } = studentRows[0];
-        eventData.student_name = student_name;
-
-        // Check for an open login
-        const [openLogins] = await dbPool.query(
-            "SELECT id FROM attendance_log WHERE roll_no = ? AND log_date = ? AND logout_time IS NULL LIMIT 1",
-            [roll_no, currentDate]
-        );
+        
+        eventData.user_name = userRows[0].user_name;
+        const [openLogins] = await dbPool.query("SELECT log_id FROM attendance_log WHERE user_id = ? AND log_date = ? AND logout_time IS NULL LIMIT 1", [user_id, currentDate]);
 
         if (openLogins.length > 0) {
-            const logId = openLogins[0].id;
-            await dbPool.query("UPDATE attendance_log SET logout_time = ? WHERE id = ?", [currentTime, logId]);
+            await dbPool.query("UPDATE attendance_log SET logout_time = ? WHERE log_id = ?", [currentTime, openLogins[0].log_id]);
             eventData.status = 'LOGOUT';
             eventData.time = currentTime;
+            io.emit('scan_event', eventData);
         } else {
-            // LOGIN Event
-            await dbPool.query("INSERT INTO attendance_log (roll_no, log_date, login_time) VALUES (?, ?, ?)", [roll_no, currentDate, currentTime]);
+            await dbPool.query("INSERT INTO attendance_log (user_id, log_date, login_time) VALUES (?, ?, ?)", [user_id, currentDate, currentTime]);
             eventData.status = 'LOGIN';
             eventData.time = currentTime;
-
-            // NEW: Update branch visit count
-            await dbPool.query(
-                `INSERT INTO branch_visits (visit_date, branch, visit_count) VALUES (?, ?, 1)
-                 ON DUPLICATE KEY UPDATE visit_count = visit_count + 1`,
-                [currentDate, branch]
-            );
-
-            // NEW: Fetch all of today's branch counts and broadcast them
-            const [counts] = await dbPool.query("SELECT branch, visit_count FROM branch_visits WHERE visit_date = ?", [currentDate]);
+            io.emit('scan_event', eventData);
+            // We only update counts on login
+            const counts = await getTodayBranchCounts();
             io.emit('counts_update', counts);
         }
-        io.emit('scan_event', eventData);
     } catch (error) {
         console.error("Database/Logic Error:", error);
         eventData.status = 'ERROR';
-        eventData.message = 'A server error occurred.';
         io.emit('scan_event', eventData);
     }
+}
+
+// MODIFIED: This query now counts every entry, not just unique users.
+async function getTodayBranchCounts() {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const [counts] = await dbPool.query(
+        `SELECT p.branch_name, COUNT(al.log_id) as visit_count 
+         FROM attendance_log al 
+         JOIN users u ON al.user_id = u.user_id 
+         JOIN programs p ON u.program_id = p.program_id 
+         WHERE al.log_date = ? AND u.user_type = 'student' 
+         GROUP BY p.branch_name`, 
+        [today]
+    );
+    return counts;
 }
 
 try {
@@ -102,9 +100,11 @@ try {
     parser.on('data', (line) => {
         if (line.startsWith("RFID Tag UID:")) {
             const uid = line.split(":")[1].trim();
+            // MODIFIED: This block now correctly sends the "IGNORED" event.
             if (scannedRecently.has(uid)) {
                 io.emit('scan_event', {
-                    uid: uid, status: 'IGNORED',
+                    uid: uid, 
+                    status: 'IGNORED',
                     message: `Duplicate scan. Please wait ${SCAN_TIMEOUT_MS / 1000} seconds.`
                 });
                 return;
@@ -120,15 +120,12 @@ try {
     console.error(`Could not connect to Arduino on port ${ARDUINO_PORT}.`);
 }
 
-// Main route for the live dashboard
+// --- Page Rendering Routes (No changes below this line) ---
 app.get('/', async (req, res) => {
     try {
         const today = format(new Date(), 'yyyy-MM-dd');
-        const [todaysLog] = await dbPool.query(
-            "SELECT al.roll_no, al.login_time, al.logout_time, s.student_name FROM attendance_log al JOIN students_with_branch s ON al.roll_no = s.roll_no WHERE al.log_date = ? ORDER BY al.login_time DESC",
-            [today]
-        );
-        const [counts] = await dbPool.query("SELECT branch, visit_count FROM branch_visits WHERE visit_date = ?", [today]);
+        const [todaysLog] = await dbPool.query(`SELECT al.user_id, al.login_time, al.logout_time, u.user_name FROM attendance_log al JOIN users u ON al.user_id = u.user_id WHERE al.log_date = ? ORDER BY al.login_time DESC`, [today]);
+        const counts = await getTodayBranchCounts();
         res.render('dashboard', { logs: todaysLog, counts: counts });
     } catch (error) {
         console.error("Dashboard load error:", error);
@@ -136,28 +133,121 @@ app.get('/', async (req, res) => {
     }
 });
 
-// Registration page is now at /register
-app.get('/register', async (req, res) => {
-    res.render('register', { messages: req.query });
+app.get('/register', (req, res) => res.render('register', { messages: req.query }));
+
+app.get('/manage-users', async (req, res) => {
+    try {
+        const [programs] = await dbPool.query('SELECT * FROM programs ORDER BY degree, branch_name');
+        const [departments] = await dbPool.query('SELECT * FROM departments ORDER BY department_name');
+        res.render('manage-users', { 
+            messages: req.query,
+            programs: programs,
+            departments: departments 
+        });
+    } catch (error) {
+        res.render('manage-users', { messages: { error: 'Could not load page data.' }, programs: [], departments: [] });
+    }
 });
 
-// Form posts here and redirects back to /register
+// --- Form Handling Routes (No changes below this line) ---
 app.post('/add', async (req, res) => {
-    const { roll_no, uid } = req.body;
-    if (!roll_no || !uid) {
-        return res.redirect('/register?error=All fields are required.');
-    }
+    const { user_id, uid } = req.body;
+    if (!user_id || !uid) return res.redirect('/register?error=All fields are required.');
     try {
-        await dbPool.query('INSERT INTO rfid_details (roll_no, uid) VALUES (?, ?)', [roll_no, uid]);
+        await dbPool.query('INSERT INTO rfid_details (user_id, uid) VALUES (?, ?)', [user_id, uid]);
         res.redirect('/register?success=Registration successful!');
     } catch (err) {
-        if (err.code === 'ER_DUP_ENTRY') {
-            return res.redirect('/register?error=Duplicate Roll No or UID.');
-        }
+        if (err.code === 'ER_DUP_ENTRY') return res.redirect('/register?error=Duplicate User ID or UID.');
+        if (err.code === 'ER_NO_REFERENCED_ROW_2') return res.redirect(`/register?error=User ID ${user_id} does not exist.`);
         res.redirect('/register?error=Database error.');
     }
 });
 
-server.listen(PORT, () => {
-    console.log(`🚀 Server running! Dashboard is at http://localhost:${PORT}`);
+app.post('/add-student-manual', async (req, res) => {
+    const { user_id, user_name, year, program_id } = req.body;
+    try {
+        await dbPool.query(`INSERT INTO users (user_id, user_type, user_name, year, program_id) VALUES (?, 'student', ?, ?, ?)`, [user_id, user_name, year, program_id]);
+        res.redirect('/manage-users?success=Student added successfully!');
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') return res.redirect('/manage-users?error=Student with that ID already exists.');
+        res.redirect('/manage-users?error=Failed to add student.');
+    }
 });
+
+app.post('/upload-students-excel', upload.single('userFile'), async (req, res) => {
+    if (!req.file) return res.redirect('/manage-users?error=No student Excel file was uploaded.');
+    
+    const connection = await dbPool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(req.file.path);
+        const worksheet = workbook.getWorksheet(1);
+        let count = 0;
+
+        for (let i = 2; i <= worksheet.rowCount; i++) {
+            const row = worksheet.getRow(i);
+            const user_id = row.getCell(1).value, user_name = row.getCell(2).value, year = row.getCell(3).value, degree = row.getCell(4).value, branch_name = row.getCell(5).value;
+            
+            if (!user_id) continue;
+            const [programRows] = await connection.query('SELECT program_id FROM programs WHERE degree = ? AND branch_name = ?', [degree, branch_name]);
+            if (programRows.length === 0) throw new Error(`Program not found for ${degree} - ${branch_name}.`);
+            
+            await connection.query(`INSERT INTO users (user_id, user_type, user_name, program_id, year) VALUES (?, 'student', ?, ?, ?)`, [user_id, user_name, programRows[0].program_id, year]);
+            count++;
+        }
+        await connection.commit();
+        res.redirect(`/manage-users?success=${count} students uploaded!`);
+    } catch (error) {
+        await connection.rollback();
+        res.redirect(`/manage-users?error=${error.message}`);
+    } finally {
+        connection.release();
+    }
+});
+
+app.post('/add-faculty-manual', async (req, res) => {
+    const { user_id, user_name, designation, department_id } = req.body;
+    try {
+        await dbPool.query(`INSERT INTO users (user_id, user_type, user_name, designation, department_id) VALUES (?, 'faculty', ?, ?, ?)`, [user_id, user_name, designation, department_id]);
+        res.redirect('/manage-users?success=Faculty added successfully!');
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') return res.redirect('/manage-users?error=Faculty with that ID already exists.');
+        res.redirect('/manage-users?error=Failed to add faculty.');
+    }
+});
+
+app.post('/upload-faculty-excel', upload.single('userFile'), async (req, res) => {
+    if (!req.file) return res.redirect('/manage-users?error=No faculty Excel file was uploaded.');
+
+    const connection = await dbPool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(req.file.path);
+        const worksheet = workbook.getWorksheet(1);
+        let count = 0;
+
+        for (let i = 2; i <= worksheet.rowCount; i++) {
+            const row = worksheet.getRow(i);
+            const user_id = row.getCell(1).value, user_name = row.getCell(2).value, department_name = row.getCell(3).value, designation = row.getCell(4).value;
+
+            if (!user_id) continue;
+            const [deptRows] = await connection.query('SELECT department_id FROM departments WHERE department_name = ?', [department_name]);
+            if (deptRows.length === 0) throw new Error(`Department not found for ${department_name}.`);
+            
+            await connection.query(`INSERT INTO users (user_id, user_type, user_name, department_id, designation) VALUES (?, 'faculty', ?, ?, ?)`, [user_id, user_name, deptRows[0].department_id, designation]);
+            count++;
+        }
+        await connection.commit();
+        res.redirect(`/manage-users?success=${count} faculty members uploaded!`);
+    } catch (error) {
+        await connection.rollback();
+        res.redirect(`/manage-users?error=${error.message}`);
+    } finally {
+        connection.release();
+    }
+});
+
+server.listen(PORT, () => console.log(`🚀 Server running! Dashboard is at http://localhost:${PORT}`));
+

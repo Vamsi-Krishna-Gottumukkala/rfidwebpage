@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Users</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; padding: 2em; }
+        .container { max-width: 800px; margin: auto; }
+        h1, h2, h3 { color: #000; }
+        nav { margin-bottom: 2em; font-weight: bold; }
+        nav a { text-decoration: none; color: #0866ff; }
+        .flash { padding: 1em; margin-bottom: 1em; border-radius: 4px; text-align: center; }
+        .flash.success { background-color: #d4edda; color: #155724; }
+        .flash.error { background-color: #f8d7da; color: #721c24; }
+        .tab-buttons { border-bottom: 2px solid #ccc; margin-bottom: 1.5em; }
+        .tab-button { background: #e4e6eb; border: none; padding: 1em 1.5em; font-size: 1.1em; cursor: pointer; border-radius: 8px 8px 0 0; color: #1c1e21; }
+        .tab-button.active { background: white; border: 2px solid #ccc; border-bottom: 2px solid white; position: relative; top: 2px; }
+        .tab-content { display: none; background: white; padding: 2em; border: 2px solid #ccc; border-top: none; border-radius: 0 0 8px 8px; }
+        .tab-content.active { display: block; }
+        .form-section { margin-bottom: 2em; padding-bottom: 2em; border-bottom: 1px solid #eee; }
+        .form-section:last-child { border-bottom: none; }
+        form { display: grid; grid-template-columns: 1fr; gap: 1.2em; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1em; }
+        label { font-weight: bold; }
+        input, select { padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; width: 100%; box-sizing: border-box; }
+        button { padding: 0.8em 1.5em; background-color: #0866ff; color: white; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; }
+        .instructions { background-color: #e7f3ff; border-left: 5px solid #0866ff; padding: 1em; margin-top: 1.5em; text-align: left; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav><a href="/">&larr; Back to Live Dashboard</a></nav>
+        <h1>Manage Users</h1>
+        
+        <% if (messages.success) { %><div class="flash success"><%= messages.success %></div><% } %>
+        <% if (messages.error) { %><div class="flash error"><%= messages.error %></div><% } %>
+
+        <div class="tab-buttons">
+            <button class="tab-button active" onclick="openTab('students')">Manage Students</button>
+            <button class="tab-button" onclick="openTab('faculty')">Manage Faculty</button>
+        </div>
+
+        <!-- Student Management Tab -->
+        <div id="students" class="tab-content active">
+            <div class="form-section">
+                <h2>Add Single Student Manually</h2>
+                <form action="/add-student-manual" method="post">
+                    <div class="form-grid">
+                        <div><label for="s_user_id">Roll Number:</label><input type="text" id="s_user_id" name="user_id" required></div>
+                        <div><label for="s_user_name">Full Name:</label><input type="text" id="s_user_name" name="user_name" required></div>
+                        <div><label for="s_year">Year:</label><input type="number" id="s_year" name="year" required></div>
+                        <div>
+                            <label for="s_program_id">Program:</label>
+                            <select id="s_program_id" name="program_id" required>
+                                <% programs.forEach(p => { %>
+                                    <option value="<%= p.program_id %>"><%= p.degree %> - <%= p.branch_name %></option>
+                                <% }); %>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit">Add Student</button>
+                </form>
+            </div>
+            <div class="form-section">
+                <h2>Upload Students via Excel</h2>
+                <form action="/upload-students-excel" method="post" enctype="multipart/form-data">
+                    <input type="file" name="userFile" accept=".xlsx" required>
+                    <button type="submit">Upload Student File</button>
+                </form>
+                <div class="instructions">
+                    <p>Excel file must have columns in this order: <strong>Roll No, Full Name, Year, Degree, Branch Name</strong>.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Faculty Management Tab -->
+        <div id="faculty" class="tab-content">
+            <div class="form-section">
+                <h2>Add Single Faculty Manually</h2>
+                <form action="/add-faculty-manual" method="post">
+                    <div class="form-grid">
+                        <div><label for="f_user_id">Faculty ID:</label><input type="text" id="f_user_id" name="user_id" required></div>
+                        <div><label for="f_user_name">Full Name:</label><input type="text" id="f_user_name" name="user_name" required></div>
+                        <div><label for="f_designation">Designation:</label><input type="text" id="f_designation" name="designation" required></div>
+                        <div>
+                            <label for="f_department_id">Department:</label>
+                            <select id="f_department_id" name="department_id" required>
+                                <% departments.forEach(d => { %>
+                                    <option value="<%= d.department_id %>"><%= d.department_name %></option>
+                                <% }); %>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit">Add Faculty</button>
+                </form>
+            </div>
+            <div class="form-section">
+                <h2>Upload Faculty via Excel</h2>
+                <form action="/upload-faculty-excel" method="post" enctype="multipart/form-data">
+                     <input type="file" name="userFile" accept=".xlsx" required>
+                    <button type="submit">Upload Faculty File</button>
+                </form>
+                <div class="instructions">
+                    <p>Excel file must have columns in this order: <strong>Faculty ID, Full Name, Department Name, Designation</strong>.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+    </script>
+</body>
+</html>
+
