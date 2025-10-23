@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Attendance Reports</title>
+    <title>Admin Home</title> <!-- Changed Title -->
     <style>
         body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; }
         .container { max-width: 1000px; margin: auto; padding: 2em; }
@@ -14,55 +14,19 @@
         .nav-links { display: flex; align-items: center; gap: 2em; font-size: 1.1em; }
         nav a { text-decoration: none; font-weight: bold; color: #0866ff; }
         .logout-btn { background-color: #f02849; color: white; padding: 0.5em 1em; border-radius: 6px; text-decoration: none; }
+        .login-btn { background-color: #0866ff; color: white; padding: 0.5em 1em; border-radius: 6px; text-decoration: none; }
         @media (max-width: 900px) { .nav-brand-name { display: none; } .nav-links { gap: 1em; } }
 
         .panel { background: white; padding: 2em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2em; text-align: center; }
-        
-        /* MODIFIED: Updated card and icon styles */
+
         .card-selection-container { display: flex; justify-content: center; gap: 2.5em; flex-wrap: wrap; }
-        .report-card {
-            background-color: #fff;
-            border: 1px solid #ddd;
-            border-radius: 12px;
-            padding: 2em;
-            text-align: center;
-            transition: all 0.2s ease-in-out;
-            width: 280px;
-            text-decoration: none;
-            color: inherit;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .report-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.12);
-            border-color: #0866ff;
-        }
-        .card-icon-background {
-            width: 80px;
-            height: 80px;
-            border-radius: 10px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 1.5em;
-        }
-        .student-icon-bg {
-             background: linear-gradient(135deg, #4285F4, #3C78D8);
-        }
-        .faculty-icon-bg {
-            background: linear-gradient(135deg, #34A853, #2E8E46);
-        }
-        .report-card h2 {
-            margin: 0 0 0.5em 0;
-            font-size: 1.8em;
-        }
-        .report-card p {
-            font-size: 1.1em;
-            color: #65676b;
-            line-height: 1.5;
-        }
+        .report-card { background-color: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 2em; text-align: center; transition: all 0.2s ease-in-out; width: 280px; text-decoration: none; color: inherit; display: flex; flex-direction: column; align-items: center; }
+        .report-card:hover { transform: translateY(-8px); box-shadow: 0 10px 20px rgba(0,0,0,0.12); border-color: #0866ff; }
+        .card-icon-background { width: 70px; height: 70px; border-radius: 10px; display: flex; justify-content: center; align-items: center; margin-bottom: 1.5em; }
+        .student-icon-bg { background: linear-gradient(135deg, #4285F4, #3C78D8); }
+        .faculty-icon-bg { background: linear-gradient(135deg, #34A853, #2E8E46); }
+        .report-card h2 { margin: 0 0 0.5em 0; font-size: 1.6em; }
+        .report-card p { font-size: 1em; color: #65676b; line-height: 1.4; }
     </style>
 </head>
 <body>
@@ -72,33 +36,44 @@
                 <img src="/assets/gvplogo.png" alt="College Logo" class="nav-logo">
                 <span class="nav-brand-name">Gayatri Vidya Parishad College for Degree and P.G. Courses (A)</span>
             </div>
-            <div class="nav-links">
-                <a href="/dashboard">Live Dashboard</a>
-                <a href="/manage-users">Manage Users</a>
-                <a href="/register">Register Card</a>
-                <a href="/logout" class="logout-btn">Logout</a>
+             <div class="nav-links">
+                 <!-- Conditional Links based on res.locals.loggedIn -->
+                <% if (loggedIn) { %>
+                    <!-- Links shown only when logged in -->
+                    <a href="/home">Home</a> <!-- Admin Home -->
+                    <a href="/dashboard">Live Dashboard</a>
+                    <a href="/manage-users">Manage Users</a>
+                    <a href="/register">Register Card</a>
+                    <a href="/logout" class="logout-btn">Logout</a>
+                <% } else { %>
+                    <!-- Links shown only when logged out -->
+                    <a href="/dashboard">Live Dashboard</a>
+                    <a href="/register">Register Card</a>
+                    <a href="/login" class="login-btn">Admin Login</a>
+                <% } %>
             </div>
         </nav>
     </div>
 
     <div class="container">
         <div class="panel">
-            <h1>Select a Report Type</h1>
-            <p style="font-size: 1.2em; color: #65676b; margin-top: -1em; margin-bottom: 2.5em;">Choose the category of users you want to generate a report for.</p>
+            <h1>Admin Home</h1> <!-- Changed Title -->
+            <p style="font-size: 1.2em; color: #65676b; margin-top: -1em; margin-bottom: 2.5em;">Select the user category you want to manage or generate reports for.</p>
             <div class="card-selection-container">
-                <a href="/reports/student" class="report-card">
+                <!-- MODIFIED: Links point to the new action selection pages -->
+                <a href="/actions/student" class="report-card">
                     <div class="card-icon-background student-icon-bg">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"></path><path d="M22 10v6"></path><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"></path></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"></path><path d="M22 10v6"></path><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"></path></svg>
                     </div>
                     <h2>Students</h2>
-                    <p>Generate attendance reports for all undergraduate and postgraduate students.</p>
+                    <p>Manage student data or generate attendance reports.</p>
                 </a>
-                <a href="/reports/faculty" class="report-card">
+                <a href="/actions/faculty" class="report-card">
                     <div class="card-icon-background faculty-icon-bg">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                     </div>
                     <h2>Faculty</h2>
-                    <p>Generate attendance reports for all teaching and non-teaching staff members.</p>
+                    <p>Manage faculty data or generate attendance reports.</p>
                 </a>
             </div>
         </div>

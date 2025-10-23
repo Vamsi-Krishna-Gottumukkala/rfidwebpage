@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Login</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .login-container { background: white; padding: 3em; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        .login-logo { height: 60px; margin-bottom: 1.5em; }
+        h1 { margin-bottom: 1.5em; color: #1c1e21; }
+        form { display: flex; flex-direction: column; gap: 1.5em; }
+        input { padding: 1em; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }
+        button { padding: 1em; background-color: #0866ff; color: white; border: none; border-radius: 6px; font-size: 1.1em; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #0655d8; }
+        .flash { padding: 1em; margin-top: 1.5em; border-radius: 4px; }
+        .flash.error { background-color: #f8d7da; color: #721c24; }
+        .public-links { margin-top: 2em; font-size: 0.9em; }
+        .public-links a { color: #0866ff; text-decoration: none; margin: 0 0.5em; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <img src="/assets/gvplogo.png" alt="College Logo" class="login-logo">
+        <h1>Admin Login</h1>
+
+        <% if (messages && messages.error) { %>
+            <div class="flash error"><%= messages.error %></div>
+        <% } %>
+
+        <form action="/login" method="POST">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Login</button>
+        </form>
+         <div class="public-links">
+            <a href="/dashboard">View Live Dashboard</a> |
+            <a href="/register">Register Card</a>
+        </div>
+    </div>
+</body>
+</html>
+
