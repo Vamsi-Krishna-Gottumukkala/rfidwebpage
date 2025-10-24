@@ -4,13 +4,13 @@ const { Server } = require('socket.io');
 const mysql = require('mysql2/promise');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
-const { format } = require('date-fns');
+const { format } = require('date-fns'); // Standard date-fns functions are okay
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const path = require('path');
 const cron = require('node-cron');
 const fs = require('fs');
-const session = require('express-session'); // For login sessions
+const session = require('express-session');
 // const bcrypt = require('bcrypt'); // Removed bcrypt
 
 const app = express();
@@ -25,7 +25,8 @@ const ARDUINO_PORT = 'COM14'; // Make sure this is correct
 
 const dbPool = mysql.createPool({
     host: 'localhost', user: 'root', password: '', database: 'library_system',
-    waitForConnections: true, connectionLimit: 10, queueLimit: 0
+    waitForConnections: true, connectionLimit: 10, queueLimit: 0,
+    dateStrings: true
 });
 
 app.set('view engine', 'ejs');
@@ -34,24 +35,32 @@ app.use(express.static('public'));
 
 // --- Session Configuration ---
 app.use(session({
-    secret: 'a_different_secret_key_please_change', // CHANGE THIS!
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
+    secret: 'a_different_secret_key_please_change', // CHANGE THIS! Use a long random string
+    resave: false, // Don't save session if unmodified
+    saveUninitialized: false, // Don't create session until something stored
+    cookie: {
+        secure: false, // Set to true if using HTTPS
+        httpOnly: true, // Prevent client-side JS access
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
 }));
 
 // Middleware to pass login status to all views
 app.use((req, res, next) => {
     res.locals.loggedIn = req.session.user ? true : false;
     res.locals.user = req.session.user;
+    // Add log to check session on every request
+    // console.log(`[${new Date().toLocaleTimeString()}] Request for ${req.path}, Session User:`, req.session.user);
     next();
 });
 
 // --- Authentication Middleware ---
 const isAuthenticated = (req, res, next) => {
+    console.log(`[Auth Check] Path: ${req.path}, Session User:`, req.session.user); // Log session check
     if (req.session.user) {
         next(); // User is logged in, proceed
     } else {
+        console.log('[Auth Check] Redirecting to login.'); // Log redirect reason
         res.redirect('/login?error=Please login to access this page.'); // Not logged in, redirect
     }
 };
@@ -118,70 +127,87 @@ app.post('/add', async (req, res) => { // Consider adding isAuthenticated if onl
 
 // --- Login/Logout ---
 app.get('/login', (req, res) => {
-    if (req.session.user) return res.redirect('/home'); // Redirect logged-in users away from login
+    if (req.session.user) return res.redirect('/home');
     res.render('login', { messages: req.query });
 });
 
+// MODIFIED: Added logging and alternative session saving
 app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res.redirect('/login?error=Username and password are required.');
-  }
-
-  try {
-    const [rows] = await dbPool.query(
-      'SELECT username, password, role, user_id FROM credentials WHERE username = ?',
-      [username]
-    );
-
-    if (rows.length === 0) {
-      console.log("❌ No user found for", username);
-      return res.redirect('/login?error=Invalid username or password.');
+    const { username, password } = req.body;
+    console.log(`[Login Attempt] User: ${username}`); // Log attempt
+    if (!username || !password) {
+        return res.redirect('/login?error=Username and password are required.');
     }
-
-    const user = rows[0];
-
-    // Debugging info
-    console.log("✅ DB User:", user.username, " | DB Password:", user.password);
-    console.log("🔹 Input Password:", password);
-
-    if (password.trim() === user.password.trim()) {
-      // Regenerate first
-      req.session.regenerate((err) => {
-        if (err) {
-          console.error('Session regeneration error:', err);
-          return res.redirect('/login?error=Session error.');
+    try {
+        const [rows] = await dbPool.query('SELECT username, password, role, user_id FROM credentials WHERE username = ?', [username]);
+        if (rows.length === 0) {
+            console.log(`[Login Failed] User not found: ${username}`);
+            return res.redirect('/login?error=Invalid username or password.');
         }
+        const user = rows[0];
 
-        req.session.user = {
-          username: user.username,
-          role: user.role,
-          linked_user_id: user.user_id
-        };
+        // --- Plain Text Password Check (INSECURE) ---
+        if (password === user.password) {
+            console.log(`[Login Success] User: ${username}`);
+            // --- End Direct Comparison ---
 
-        req.session.save((err) => {
-          if (err) console.error('Session save error:', err);
-          console.log("✅ Logged in as:", user.username);
-          res.redirect('/home');
-        });
-      });
-    } else {
-      console.log("❌ Password mismatch");
-      res.redirect('/login?error=Invalid username or password.');
+            // Store user info directly in the session
+            req.session.user = { username: user.username, role: user.role, linked_user_id: user.user_id };
+
+            // Save the session explicitly before redirecting
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Session save error:', err);
+                    return res.redirect('/login?error=Session error during save.');
+                }
+                console.log(`[Login Success] Session saved for ${username}. Redirecting to /home.`);
+                res.redirect('/home'); // Redirect AFTER session is saved
+            });
+
+            // Using regenerate (alternative, keep one of the methods - save or regenerate)
+            /*
+            req.session.regenerate((err) => {
+                 if (err) {
+                     console.error('Session regeneration error:', err);
+                     return res.redirect('/login?error=Session error during regenerate.');
+                 }
+                 // Set user data AFTER regenerating
+                 req.session.user = { username: user.username, role: user.role, linked_user_id: user.user_id };
+                 console.log(`[Login Success] Session regenerated for ${username}. User data set.`);
+
+                 // Save again after setting data in regenerated session
+                 req.session.save((saveErr) => {
+                    if (saveErr) {
+                         console.error('Session save after regenerate error:', saveErr);
+                         return res.redirect('/login?error=Session error after regenerate.');
+                    }
+                    console.log(`[Login Success] Regenerated session saved for ${username}. Redirecting to /home.`);
+                    res.redirect('/home');
+                 });
+            });
+            */
+        } else {
+            console.log(`[Login Failed] Invalid password for user: ${username}`);
+            res.redirect('/login?error=Invalid username or password.');
+        }
+    } catch (error) {
+        console.error('[Login Error] Database or other error:', error);
+        res.redirect('/login?error=An error occurred during login.');
     }
-  } catch (error) {
-    console.error('Login error:', error);
-    res.redirect('/login?error=An error occurred during login.');
-  }
 });
 
 
 app.get('/logout', (req, res) => {
+    const username = req.session.user ? req.session.user.username : 'Unknown';
+    console.log(`[Logout Attempt] User: ${username}`);
     req.session.destroy((err) => {
-        if (err) { console.error("Logout error:", err); return res.redirect('/login'); } // Redirect anyway
-        res.clearCookie('connect.sid'); // Clear the session cookie
-        res.redirect('/login'); // Redirect to login page after logout
+        if (err) {
+            console.error("Logout error:", err);
+            // Still try to clear cookie and redirect
+        }
+        res.clearCookie('connect.sid'); // The default session cookie name
+        console.log(`[Logout Success] Session destroyed for ${username}. Redirecting to /login.`);
+        res.redirect('/login');
     });
 });
 
@@ -222,35 +248,68 @@ app.post('/reports/download', isAuthenticated, async (req, res) => {
     } catch (error) { console.error("Excel download error:", error); res.status(500).send("Failed to generate Excel file."); }
 });
 
-app.get('/manage-users', isAuthenticated, async (req, res) => {
-    try { const [programs] = await dbPool.query('SELECT * FROM programs ORDER BY degree, branch_name'); const [departments] = await dbPool.query('SELECT * FROM departments ORDER BY department_name'); res.render('manage-users', { messages: req.query, programs: programs, departments: departments, activeTab: req.query.tab || 'students' }); }
-    catch (error) { res.render('manage-users', { messages: { error: 'Could not load page data.' }, programs: [], departments: [], activeTab: 'students' }); }
+// Separate User Management Pages
+app.get('/manage-student', isAuthenticated, async (req, res) => {
+    try { const [programs] = await dbPool.query('SELECT * FROM programs ORDER BY degree, branch_name'); res.render('manage-student', { messages: req.query, programs: programs }); } catch (error) { res.render('manage-student', { messages: { error: 'Could not load page data.' }, programs: [] }); }
+});
+app.get('/manage-faculty', isAuthenticated, async (req, res) => {
+     try { const [departments] = await dbPool.query('SELECT * FROM departments ORDER BY department_name'); res.render('manage-faculty', { messages: req.query, departments: departments }); } catch (error) { res.render('manage-faculty', { messages: { error: 'Could not load page data.' }, departments: [] }); }
 });
 
+// User Management POST Actions
 app.post('/add-student-manual', isAuthenticated, async (req, res) => {
-    const { user_id, user_name, year, program_id } = req.body; try { await dbPool.query(`INSERT INTO users (user_id, user_type, user_name, year, program_id) VALUES (?, 'student', ?, ?, ?)`, [user_id, user_name, year, program_id]); res.redirect('/manage-users?tab=students&success=Student added!'); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.redirect('/manage-users?tab=students&error=ID exists.'); res.redirect('/manage-users?tab=students&error=Failed.'); }
+    const { user_id, user_name, year, program_id } = req.body; try { await dbPool.query(`INSERT INTO users (user_id, user_type, user_name, year, program_id) VALUES (?, 'student', ?, ?, ?)`, [user_id, user_name, year, program_id]); res.redirect('/manage-student?success=Student added!'); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.redirect('/manage-student?error=ID exists.'); res.redirect('/manage-student?error=Failed.'); }
 });
 app.post('/upload-students-excel', isAuthenticated, upload.single('userFile'), async (req, res) => {
-    if (!req.file) return res.redirect('/manage-users?tab=students&error=No file.'); const connection = await dbPool.getConnection(); try { const workbook = new ExcelJS.Workbook(); await workbook.xlsx.readFile(req.file.path); const worksheet = workbook.getWorksheet(1); const studentsToInsert = [];
+    if (!req.file) return res.redirect('/manage-student?error=No file.'); const connection = await dbPool.getConnection(); try { const workbook = new ExcelJS.Workbook(); await workbook.xlsx.readFile(req.file.path); const worksheet = workbook.getWorksheet(1); const studentsToInsert = [];
         for (let i = 2; i <= worksheet.rowCount; i++) { const row = worksheet.getRow(i); const user_id = row.getCell(1).text; const user_name = row.getCell(2).text; const year = row.getCell(3).text; const degree = row.getCell(4).text; const branch_code = row.getCell(5).text; if (!user_id) continue; const [programRows] = await connection.query('SELECT program_id FROM programs WHERE degree = ? AND branch_code = ?', [degree, branch_code]); if (programRows.length === 0) { throw new Error(`Program not found: ${degree}-${branch_code}.`); } studentsToInsert.push([user_id, 'student', user_name, programRows[0].program_id, year]); }
-        if (studentsToInsert.length > 0) { await connection.beginTransaction(); await connection.query(`INSERT INTO users (user_id, user_type, user_name, program_id, year) VALUES ?`, [studentsToInsert]); await connection.commit(); } res.redirect(`/manage-users?tab=students&success=${studentsToInsert.length} uploaded!`);
-    } catch (error) { if (connection) await connection.rollback(); res.redirect(`/manage-users?tab=students&error=${error.message}`); } finally { if (connection) connection.release(); if (req.file) fs.unlink(req.file.path, (err) => { if (err) console.error("Err delete temp:", err); }); }
+        if (studentsToInsert.length > 0) { await connection.beginTransaction(); await connection.query(`INSERT INTO users (user_id, user_type, user_name, program_id, year) VALUES ?`, [studentsToInsert]); await connection.commit(); } res.redirect(`/manage-student?success=${studentsToInsert.length} uploaded!`);
+    } catch (error) { if (connection) await connection.rollback(); res.redirect(`/manage-student?error=${error.message}`); } finally { if (connection) connection.release(); if (req.file) fs.unlink(req.file.path, (err) => { if (err) console.error("Err delete temp:", err); }); }
 });
 app.post('/add-faculty-manual', isAuthenticated, async (req, res) => {
-    const { user_id, user_name, designation, department_id } = req.body; try { await dbPool.query(`INSERT INTO users (user_id, user_type, user_name, designation, department_id) VALUES (?, 'faculty', ?, ?, ?)`, [user_id, user_name, designation, department_id]); res.redirect('/manage-users?tab=faculty&success=Faculty added!'); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.redirect('/manage-users?tab=faculty&error=ID exists.'); res.redirect('/manage-users?tab=faculty&error=Failed.'); }
+    const { user_id, user_name, designation, department_id } = req.body; try { await dbPool.query(`INSERT INTO users (user_id, user_type, user_name, designation, department_id) VALUES (?, 'faculty', ?, ?, ?)`, [user_id, user_name, designation, department_id]); res.redirect('/manage-faculty?success=Faculty added!'); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.redirect('/manage-faculty?error=ID exists.'); res.redirect('/manage-faculty?error=Failed.'); }
 });
 app.post('/upload-faculty-excel', isAuthenticated, upload.single('userFile'), async (req, res) => {
-     if (!req.file) return res.redirect('/manage-users?tab=faculty&error=No file.'); const connection = await dbPool.getConnection(); try { const workbook = new ExcelJS.Workbook(); await workbook.xlsx.readFile(req.file.path); const worksheet = workbook.getWorksheet(1); const facultyToInsert = [];
+     if (!req.file) return res.redirect('/manage-faculty?error=No file.'); const connection = await dbPool.getConnection(); try { const workbook = new ExcelJS.Workbook(); await workbook.xlsx.readFile(req.file.path); const worksheet = workbook.getWorksheet(1); const facultyToInsert = [];
         for (let i = 2; i <= worksheet.rowCount; i++) { const row = worksheet.getRow(i); const user_id = row.getCell(1).text; const user_name = row.getCell(2).text; const department_name = row.getCell(3).text; const designation = row.getCell(4).text; if (!user_id) continue; const [deptRows] = await connection.query('SELECT department_id FROM departments WHERE department_name = ?', [department_name]); if (deptRows.length === 0) { throw new Error(`Department not found: ${department_name}.`); } facultyToInsert.push([user_id, 'faculty', user_name, deptRows[0].department_id, designation]); }
-        if (facultyToInsert.length > 0) { await connection.beginTransaction(); await connection.query(`INSERT INTO users (user_id, user_type, user_name, department_id, designation) VALUES ?`, [facultyToInsert]); await connection.commit(); } res.redirect(`/manage-users?tab=faculty&success=${facultyToInsert.length} uploaded!`);
-    } catch (error) { if (connection) await connection.rollback(); res.redirect(`/manage-users?tab=faculty&error=${error.message}`); } finally { if (connection) connection.release(); if (req.file) fs.unlink(req.file.path, (err) => { if (err) console.error("Err delete temp:", err); }); }
+        if (facultyToInsert.length > 0) { await connection.beginTransaction(); await connection.query(`INSERT INTO users (user_id, user_type, user_name, department_id, designation) VALUES ?`, [facultyToInsert]); await connection.commit(); } res.redirect(`/manage-faculty?success=${facultyToInsert.length} uploaded!`);
+    } catch (error) { if (connection) await connection.rollback(); res.redirect(`/manage-faculty?error=${error.message}`); } finally { if (connection) connection.release(); if (req.file) fs.unlink(req.file.path, (err) => { if (err) console.error("Err delete temp:", err); }); }
 });
 
+// Edit RFID Routes
+app.get('/edit-rfid', isAuthenticated, async (req, res) => {
+    res.render('edit-rfid', { messages: req.query, searchResult: null });
+});
+app.post('/edit-rfid/search', isAuthenticated, async (req, res) => {
+    const { user_id_search } = req.body; if (!user_id_search) return res.render('edit-rfid', { messages: { error: 'Please enter a User ID.' }, searchResult: null });
+    try { const [userRows] = await dbPool.query('SELECT user_id, user_name, user_type FROM users WHERE user_id = ?', [user_id_search]); if (userRows.length === 0) return res.render('edit-rfid', { messages: { error: `User ID '${user_id_search}' not found.` }, searchResult: null }); const user = userRows[0]; const [rfidRows] = await dbPool.query('SELECT uid FROM rfid_details WHERE user_id = ?', [user_id_search]); const currentUid = rfidRows.length > 0 ? rfidRows[0].uid : null; res.render('edit-rfid', { messages: req.query, searchResult: { ...user, currentUid } }); } catch (error) { console.error("RFID Search Error:", error); res.render('edit-rfid', { messages: { error: 'Error searching.' }, searchResult: null }); }
+});
+app.post('/edit-rfid/update', isAuthenticated, async (req, res) => {
+    const { user_id, new_uid } = req.body; if (!user_id) return res.redirect('/edit-rfid?error=User ID missing.');
+    const connection = await dbPool.getConnection(); try { await connection.beginTransaction();
+        if (new_uid) { const [existingUidRows] = await connection.query('SELECT user_id FROM rfid_details WHERE uid = ? AND user_id != ?', [new_uid, user_id]); if (existingUidRows.length > 0) throw new Error(`UID '${new_uid}' already assigned to ${existingUidRows[0].user_id}.`); }
+        await connection.query('DELETE FROM rfid_details WHERE user_id = ?', [user_id]);
+        if (new_uid) { await connection.query('INSERT INTO rfid_details (user_id, uid) VALUES (?, ?)', [user_id, new_uid]); }
+        await connection.commit(); res.redirect(`/edit-rfid?success=Updated RFID for ${user_id}.`);
+    } catch (error) { await connection.rollback(); console.error("RFID Update Error:", error); res.redirect(`/edit-rfid?error=${encodeURIComponent(error.message || 'Update failed.')}&user_id_search=${encodeURIComponent(user_id)}`); } finally { connection.release(); }
+});
+
+// Manage Programs Routes
+app.get('/manage-programs', isAuthenticated, async (req, res) => {
+    try { const [programs] = await dbPool.query('SELECT * FROM programs ORDER BY degree, branch_name'); res.render('manage-programs', { messages: req.query, programs: programs }); } catch (error) { console.error("Error fetching programs:", error); res.render('manage-programs', { messages: { error: 'Could not load programs.' }, programs: [] }); }
+});
+app.post('/manage-programs/add', isAuthenticated, async (req, res) => {
+    const { degree, branch_name, branch_code } = req.body; if (!degree || !branch_name || !branch_code) return res.redirect('/manage-programs?error=All fields required.');
+    try { await dbPool.query('INSERT INTO programs (degree, branch_name, branch_code) VALUES (?, ?, ?)', [degree.trim(), branch_name.trim(), branch_code.trim().toUpperCase()]); res.redirect('/manage-programs?success=Program added!'); } catch (error) { if (error.code === 'ER_DUP_ENTRY') { if (error.sqlMessage.includes('uk_program')) return res.redirect(`/manage-programs?error=Duplicate Degree/Branch: ${degree}-${branch_name}.`); else if (error.sqlMessage.includes('branch_code')) return res.redirect(`/manage-programs?error=Duplicate Code: ${branch_code}.`); } console.error("Error adding program:", error); res.redirect('/manage-programs?error=Failed.'); }
+});
+app.post('/manage-programs/delete/:id', isAuthenticated, async (req, res) => {
+     const programId = req.params.id; try { const [studentCheck] = await dbPool.query('SELECT COUNT(*) as count FROM users WHERE program_id = ?', [programId]); if (studentCheck[0].count > 0) return res.redirect(`/manage-programs?error=Cannot delete: ${studentCheck[0].count} student(s) assigned.`); const [result] = await dbPool.query('DELETE FROM programs WHERE program_id = ?', [programId]); if (result.affectedRows > 0) res.redirect('/manage-programs?success=Deleted!'); else res.redirect('/manage-programs?error=Not found.'); } catch (error) { console.error("Error deleting program:", error); if (error.code === 'ER_ROW_IS_REFERENCED_2') return res.redirect(`/manage-programs?error=Cannot delete: Referenced by users.`); res.redirect('/manage-programs?error=Failed.'); }
+});
 
 // --- Scheduled Tasks ---
-async function autoLogoutCurrentDay() { const today = format(new Date(), 'yyyy-MM-dd'); const logoutTime = '18:00:00'; try { const [result] = await dbPool.query(`UPDATE attendance_log SET logout_time = ? WHERE log_date = ? AND logout_time IS NULL`, [logoutTime, today]); if (result.affectedRows > 0) console.log(`Auto-logged out ${result.affectedRows} for ${today}.`); } catch (error) { console.error('Auto-logout error:', error); } }
-async function cleanupPreviousDays() { const today = format(new Date(), 'yyyy-MM-dd'); const logoutTime = '18:00:00'; try { const [result] = await dbPool.query(`UPDATE attendance_log SET logout_time = ? WHERE log_date < ? AND logout_time IS NULL`, [logoutTime, today]); if (result.affectedRows > 0) console.log(`Startup Cleanup: Logged out ${result.affectedRows} prev days.`); } catch (error) { console.error('Cleanup error:', error); } }
-cron.schedule('5 18 * * *', () => { console.log('Running daily auto-logout...'); autoLogoutCurrentDay(); }, { scheduled: true, timezone: "Asia/Kolkata" });
+async function autoLogoutCurrentDay() { const today = format(new Date(), 'yyyy-MM-dd'); const logoutTime = '19:00:00'; try { const [result] = await dbPool.query(`UPDATE attendance_log SET logout_time = ? WHERE log_date = ? AND logout_time IS NULL`, [logoutTime, today]); if (result.affectedRows > 0) console.log(`Auto-logged out ${result.affectedRows} for ${today}.`); } catch (error) { console.error('Auto-logout error:', error); } }
+async function cleanupPreviousDays() { const today = format(new Date(), 'yyyy-MM-dd'); const logoutTime = '19:00:00'; try { const [result] = await dbPool.query(`UPDATE attendance_log SET logout_time = ? WHERE log_date < ? AND logout_time IS NULL`, [logoutTime, today]); if (result.affectedRows > 0) console.log(`Startup Cleanup: Logged out ${result.affectedRows} prev days.`); } catch (error) { console.error('Cleanup error:', error); } }
+cron.schedule('5 19 * * *', () => { console.log('Running daily auto-logout...'); autoLogoutCurrentDay(); }, { scheduled: true, timezone: "Asia/Kolkata" });
 
 // --- Start Server ---
 server.listen(PORT, () => {
