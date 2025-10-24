@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Students</title>
+    <style>
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; }
+        .container { max-width: 800px; margin: auto; padding: 2em; }
+        h1, h2 { color: #000; }
+
+        .navbar-container { width: 100%; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 0.75em 2em; box-sizing: border-box; margin-bottom: 2em; }
+        nav { display: flex; justify-content: space-between; align-items: center; gap: 1em; }
+        .nav-brand { display: flex; align-items: center; gap: 1em; font-weight: bold; color: #1c1e21; }
+        .nav-logo { height: 50px; width: auto; }
+        .nav-brand-name { font-size: 1.2em; }
+        .nav-links { display: flex; align-items: center; gap: 2em; font-size: 1.1em; }
+        nav a { text-decoration: none; font-weight: bold; color: #0866ff; }
+        .logout-btn { background-color: #f02849; color: white; padding: 0.5em 1em; border-radius: 6px; text-decoration: none; }
+        .login-btn { background-color: #0866ff; color: white; padding: 0.5em 1em; border-radius: 6px; text-decoration: none; }
+        @media (max-width: 900px) { .nav-brand-name { display: none; } .nav-links { gap: 1em; } }
+
+        .panel { background: white; padding: 1.5em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .back-link { font-weight: bold; color: #65676b; text-decoration: none; display: inline-block; margin-bottom: 1.5em; }
+
+        .form-section { display: grid; grid-template-columns: 1fr 1fr; gap: 2em; }
+        .form-column { padding: 1em; }
+        .form-column h3 { margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 0.5em; }
+        form { display: flex; flex-direction: column; gap: 1em; }
+        input, select { padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; width: 100%; box-sizing: border-box; }
+        button { padding: 0.8em 1.5em; color: white; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; }
+        .btn-submit { background-color: #0866ff; }
+        .btn-upload { background-color: #31a24c; }
+        .flash { padding: 1em; margin-bottom: 1em; border-radius: 4px; text-align: center; }
+        .flash.success { background-color: #d4edda; color: #155724; }
+        .flash.error { background-color: #f8d7da; color: #721c24; }
+        .instructions { background-color: #e7f3ff; border-left: 5px solid #0866ff; padding: 1em; margin-top: 1.5em; text-align: left; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="navbar-container">
+        <nav>
+            <div class="nav-brand">
+                <img src="/assets/gvplogo.png" alt="College Logo" class="nav-logo">
+                <span class="nav-brand-name">Gayatri Vidya Parishad College for Degree and P.G. Courses (A)</span>
+            </div>
+             <div class="nav-links">
+                <% if (loggedIn) { %>
+                    <a href="/home">Home</a>
+                    <a href="/dashboard">Live Dashboard</a>
+                    <!-- Removed Manage Users Link -->
+                    <a href="/register">Register Card</a>
+                    <a href="/logout" class="logout-btn">Logout</a>
+                <% } else { %>
+                    <a href="/dashboard">Live Dashboard</a>
+                    <a href="/register">Register Card</a>
+                    <a href="/login" class="login-btn">Admin Login</a>
+                <% } %>
+            </div>
+        </nav>
+    </div>
+
+    <div class="container">
+         <a href="/actions/student" class="back-link">&larr; Back to Student Actions</a>
+         <div style="clear: both;"></div>
+
+        <div class="panel">
+            <h1>Manage Students</h1>
+            <% if (messages.success) { %><div class="flash success"><%= messages.success %></div><% } %>
+            <% if (messages.error) { %><div class="flash error"><%= messages.error %></div><% } %>
+
+            <div class="form-section">
+                <div class="form-column">
+                    <h3>Add Student Manually</h3>
+                    <form action="/add-student-manual" method="post">
+                        <input type="text" name="user_id" placeholder="Roll Number" required>
+                        <input type="text" name="user_name" placeholder="Full Name" required>
+                        <input type="number" name="year" placeholder="Year (e.g., 3)" min="1" required>
+                        <select name="program_id" required>
+                            <option value="" disabled selected>Select Program</option>
+                            <% programs.forEach(p => { %>
+                                <option value="<%= p.program_id %>"><%= p.degree %> - <%= p.branch_name %></option>
+                            <% }); %>
+                        </select>
+                        <button type="submit" class="btn-submit">Add Student</button>
+                    </form>
+                </div>
+                <div class="form-column">
+                    <h3>Upload Students via Excel</h3>
+                    <form action="/upload-students-excel" method="post" enctype="multipart/form-data">
+                        <input type="file" name="userFile" accept=".xlsx" required>
+                        <button type="submit" class="btn-upload">Upload Student File</button>
+                    </form>
+                    <div class="instructions">
+                        <h4>Excel File Format:</h4>
+                        <p>Columns must be in this exact order:</p>
+                        <ol>
+                            <li><strong>user_id</strong> (Roll Number)</li>
+                            <li><strong>user_name</strong> (Full Name)</li>
+                            <li><strong>year</strong> (e.g., 3)</li>
+                            <li><strong>degree</strong> (e.g., B.Tech)</li>
+                            <li><strong>branch_code</strong> (e.g., CSE)</li>
+                        </ol>
+                        <p><strong>Important:</strong> The `degree` and `branch_code` combination must already exist in the `programs` table.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
