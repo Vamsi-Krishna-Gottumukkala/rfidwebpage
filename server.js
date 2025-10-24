@@ -21,7 +21,8 @@ const scannedRecently = new Set();
 const SCAN_TIMEOUT_MS = 5000;
 
 const PORT = 3000;
-const ARDUINO_PORT = 'COM14'; // Make sure this is correct
+const ARDUINO_PORT = '/dev/ttyACM0+';
+// const ARDUINO_PORT = 'COM14';
 
 const dbPool = mysql.createPool({
     host: 'localhost', user: 'root', password: '', database: 'library_system',
