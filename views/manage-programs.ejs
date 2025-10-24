@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Academic Programs</title>
+    <style>
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; }
+        .container { max-width: 900px; margin: auto; padding: 2em; }
+        h1, h2 { color: #000; }
+
+        .navbar-container { width: 100%; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 0.75em 2em; box-sizing: border-box; margin-bottom: 2em; }
+        nav { display: flex; justify-content: space-between; align-items: center; gap: 1em; }
+        .nav-brand { display: flex; align-items: center; gap: 1em; font-weight: bold; color: #1c1e21; }
+        .nav-logo { height: 50px; width: auto; }
+        .nav-brand-name { font-size: 1.2em; }
+        .nav-links { display: flex; align-items: center; gap: 2em; font-size: 1.1em; }
+        nav a { text-decoration: none; font-weight: bold; color: #0866ff; }
+        .logout-btn { background-color: #f02849; color: white; padding: 0.5em 1em; border-radius: 6px; text-decoration: none; }
+        .login-btn { background-color: #0866ff; color: white; padding: 0.5em 1em; border-radius: 6px; text-decoration: none; }
+        @media (max-width: 900px) { .nav-brand-name { display: none; } .nav-links { gap: 1em; } }
+
+        .panel { background: white; padding: 2em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2em; }
+        .back-link { font-weight: bold; color: #65676b; text-decoration: none; display: inline-block; margin-bottom: 1.5em; }
+
+        .add-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1em; align-items: end; margin-bottom: 2em; border-bottom: 1px solid #eee; padding-bottom: 2em; }
+        .form-group { display: flex; flex-direction: column; }
+        label { font-weight: bold; margin-bottom: 0.5em; }
+        input { padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
+        button { padding: 0.8em 1.5em; color: white; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; height: fit-content; align-self: end; }
+        .btn-add { background-color: #31a24c; }
+        .btn-delete { background-color: #e44d26; font-size: 0.9em; padding: 0.4em 0.8em; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        td form { display: inline; } /* For delete button */
+
+        .flash { padding: 1em; margin-bottom: 1em; border-radius: 4px; text-align: center; }
+        .flash.success { background-color: #d4edda; color: #155724; }
+        .flash.error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="navbar-container">
+        <nav>
+            <div class="nav-brand">
+                <img src="/assets/gvplogo.png" alt="College Logo" class="nav-logo">
+                <span class="nav-brand-name">Gayatri Vidya Parishad College for Degree and P.G. Courses (A)</span>
+            </div>
+             <div class="nav-links">
+                <% if (loggedIn) { %>
+                    <a href="/home">Home</a>
+                    <a href="/dashboard">Live Dashboard</a>
+                    <!-- Removed Manage Users Link -->
+                    <a href="/register">Register Card</a>
+                    <a href="/logout" class="logout-btn">Logout</a>
+                <% } else { %>
+                    <a href="/dashboard">Live Dashboard</a>
+                    <a href="/register">Register Card</a>
+                    <a href="/login" class="login-btn">Admin Login</a>
+                <% } %>
+            </div>
+        </nav>
+    </div>
+
+    <div class="container">
+         <a href="/home" class="back-link">&larr; Back to Home</a>
+         <div style="clear: both;"></div>
+
+        <div class="panel">
+            <h1>Manage Academic Programs</h1>
+            <% if (messages.success) { %><div class="flash success"><%= messages.success %></div><% } %>
+            <% if (messages.error) { %><div class="flash error"><%= messages.error %></div><% } %>
+
+            <h2>Add New Program</h2>
+            <form action="/manage-programs/add" method="POST" class="add-form">
+                <div class="form-group">
+                    <label for="degree">Degree (e.g., B.Tech):</label>
+                    <input type="text" id="degree" name="degree" required>
+                </div>
+                 <div class="form-group">
+                    <label for="branch_name">Branch Name (e.g., Computer Science):</label>
+                    <input type="text" id="branch_name" name="branch_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="branch_code">Branch Code (e.g., CSE):</label>
+                    <input type="text" id="branch_code" name="branch_code" required>
+                </div>
+                 <div class="form-group">
+                    <button type="submit" class="btn-add">Add Program</button>
+                </div>
+            </form>
+
+            <h2>Existing Programs</h2>
+            <% if (programs && programs.length > 0) { %>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Degree</th>
+                            <th>Branch Name</th>
+                            <th>Branch Code</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% programs.forEach(p => { %>
+                            <tr>
+                                <td><%= p.program_id %></td>
+                                <td><%= p.degree %></td>
+                                <td><%= p.branch_name %></td>
+                                <td><%= p.branch_code %></td>
+                                <td>
+                                    <!-- Delete Form -->
+                                    <form action="/manage-programs/delete/<%= p.program_id %>" method="POST" onsubmit="return confirm('Are you sure you want to delete this program? This cannot be undone.');">
+                                        <button type="submit" class="btn-delete">Delete</button>
+                                    </form>
+                                    <!-- Edit Link (Add functionality later if needed) -->
+                                    <!-- <a href="/manage-programs/edit/<%= p.program_id %>">Edit</a> -->
+                                </td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            <% } else { %>
+                <p>No academic programs found in the database.</p>
+            <% } %>
+        </div>
+    </div>
+</body>
+</html>
