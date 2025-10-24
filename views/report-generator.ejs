@@ -47,20 +47,22 @@
                 <img src="/assets/gvplogo.png" alt="College Logo" class="nav-logo">
                 <span class="nav-brand-name">Gayatri Vidya Parishad College for Degree and P.G. Courses (A)</span>
             </div>
-             <div class="nav-links">
-                 <!-- Conditional Links based on res.locals.loggedIn -->
-                <% if (loggedIn) { %>
-                    <a href="/home">Home</a>
-                    <a href="/dashboard">Live Dashboard</a>
-                    <a href="/manage-users">Manage Users</a>
-                    <a href="/register">Register Card</a>
-                    <a href="/logout" class="logout-btn">Logout</a>
-                <% } else { %>
-                    <a href="/dashboard">Live Dashboard</a>
-                    <a href="/register">Register Card</a>
-                    <a href="/login" class="login-btn">Admin Login</a>
-                <% } %>
-            </div>
+                <div class="nav-links">
+                     <!-- Conditional Links based on res.locals.loggedIn -->
+                    <% if (loggedIn) { %>
+                        <!-- Links shown only when logged in -->
+                        <a href="/home">Home</a> <!-- Admin Home -->
+                        <a href="/dashboard">Live Dashboard</a>
+                        <!-- <a href="/manage-users">Manage Users</a> REMOVED -->
+                        <a href="/register">Register Card</a>
+                        <a href="/logout" class="logout-btn">Logout</a>
+                    <% } else { %>
+                        <!-- Links shown only when logged out -->
+                        <a href="/dashboard">Live Dashboard</a>
+                        <a href="/register">Register Card</a>
+                        <a href="/login" class="login-btn">Admin Login</a>
+                    <% } %>
+                </div>
         </nav>
     </div>
 
