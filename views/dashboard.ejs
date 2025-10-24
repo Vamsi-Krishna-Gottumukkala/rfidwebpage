@@ -18,65 +18,21 @@
         .nav-links { display: flex; align-items: center; gap: 2em; font-size: 1.1em; }
         nav a { text-decoration: none; font-weight: bold; color: #0866ff; }
         .logout-btn { background-color: #f02849; color: white; padding: 0.5em 1em; border-radius: 6px; text-decoration: none; transition: background-color 0.2s; }
+        .login-btn { background-color: #0866ff; color: white; padding: 0.5em 1em; border-radius: 6px; text-decoration: none; }
         @media (max-width: 900px) { .nav-brand-name { display: none; } .nav-links { gap: 1em; } }
 
         .panel { background: white; padding: 1.5em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2em; }
         
-        #welcome-card-container {
-            min-height: 120px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 1.2em;
-            color: #65676b;
-            overflow: hidden;
-        }
-        .user-card {
-            display: flex;
-            align-items: center;
-            gap: 1.2em;
-            background-color: #fff;
-            padding: 1em;
-            border-radius: 12px;
-            animation: slideIn 0.5s ease-out forwards;
-        }
-        .profile-pic {
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
-            background-color: #e4e6eb;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border: 3px solid #fff;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        .user-details h2 {
-            margin: 0 0 0.25em 0;
-            font-size: 1.3em;
-            color: #1c1e21;
-        }
-        .user-details p {
-            margin: 0.25em 0;
-            font-size: 0.9em;
-            color: #65676b;
-        }
-        .status-banner {
-            padding: 0.3em 0.7em;
-            border-radius: 6px;
-            color: white;
-            font-weight: bold;
-            display: inline-block;
-            margin-top: 0.7em;
-            font-size: 0.75em;
-        }
+        #welcome-card-container { min-height: 120px; display: flex; justify-content: center; align-items: center; font-size: 1.2em; color: #65676b; overflow: hidden; }
+        .user-card { display: flex; align-items: center; gap: 1.2em; background-color: #fff; padding: 1em; border-radius: 12px; animation: slideIn 0.5s ease-out forwards; }
+        .profile-pic { width: 70px; height: 70px; border-radius: 50%; background-color: #e4e6eb; display: flex; justify-content: center; align-items: center; border: 3px solid #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .user-details h2 { margin: 0 0 0.25em 0; font-size: 1.3em; color: #1c1e21; }
+        .user-details p { margin: 0.25em 0; font-size: 0.9em; color: #65676b; }
+        .status-banner { padding: 0.3em 0.7em; border-radius: 6px; color: white; font-weight: bold; display: inline-block; margin-top: 0.7em; font-size: 0.75em; }
         .status-login { background-color: #31a24c; }
         .status-logout { background-color: #65676b; }
         .status-error { background-color: #f02849; }
-        @keyframes slideIn {
-            from { transform: translateY(20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
         table { width: 100%; border-collapse: collapse; margin-top: 1em; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
@@ -88,6 +44,8 @@
         .chart-wrapper h3 { text-align: center; margin-bottom: 1em; }
         .chart-container { position: relative; margin: auto; height: 250px; width: 100%; }
         @media (max-width: 1024px) { .main-layout { grid-template-columns: 1fr; } }
+        /* NEW: Added heading style */
+        .page-heading { text-align: center; color: #333; margin-top: 0.5em; margin-bottom: 1.5em; font-size: 1.8em; }
     </style>
 </head>
 <body>
@@ -97,21 +55,22 @@
                 <img src="/assets/gvplogo.png" alt="College Logo" class="nav-logo">
                 <span class="nav-brand-name">Gayatri Vidya Parishad College for Degree and P.G. Courses (A)</span>
             </div>
-            <div class="nav-links">
-                 <!-- Conditional Links based on res.locals.loggedIn -->
-                <% if (loggedIn) { %>
-                    <!-- Links shown only when logged in -->
-                    <a href="/home">Home</a> <!-- Admin Home -->
-                    <a href="/dashboard">Live Dashboard</a>
-                    <a href="/manage-users">Manage Users</a>
-                    <a href="/register">Register Card</a>
-                    <a href="/logout" class="logout-btn">Logout</a>
-                <% } else { %>
-                    <!-- Links shown only when logged out -->
-                    <a href="/dashboard">Live Dashboard</a>
-                    <a href="/register">Register Card</a>
-                    <a href="/login" class="login-btn">Admin Login</a>
-                <% } %>
+                <div class="nav-links">
+                     <!-- Conditional Links based on res.locals.loggedIn -->
+                    <% if (loggedIn) { %>
+                        <!-- Links shown only when logged in -->
+                        <a href="/home">Home</a> <!-- Admin Home -->
+                        <a href="/dashboard">Live Dashboard</a>
+                        <!-- <a href="/manage-users">Manage Users</a> REMOVED -->
+                        <a href="/register">Register Card</a>
+                        <a href="/logout" class="logout-btn">Logout</a>
+                    <% } else { %>
+                        <!-- Links shown only when logged out -->
+                        <a href="/dashboard">Live Dashboard</a>
+                        <a href="/register">Register Card</a>
+                        <a href="/login" class="login-btn">Admin Login</a>
+                    <% } %>
+                </div>
             </div>
         </nav>
     </div>
@@ -123,6 +82,9 @@
             </div>
         </div>
         
+        <!-- NEW: Added Heading -->
+        <h2 class="page-heading">Library Gate Register</h2>
+
         <div class="main-layout">
             <div class="side-column">
                 <div class="panel">
@@ -194,104 +156,26 @@
 
         socket.on('scan_event', function(data) {
             clearTimeout(welcomeTimeout);
-            
             let cardHtml = '';
-            
             if (data.status === 'LOGIN' || data.status === 'LOGOUT') {
-                const details = data.details;
-                const statusClass = data.status === 'LOGIN' ? 'status-login' : 'status-logout';
-                const statusText = data.status === 'LOGIN' ? 'Welcome to the Library' : 'Thank You for Visiting';
-
-                let detailsLine1 = '';
-                let detailsLine2 = '';
-
-                if (details.user_type === 'student') {
-                    detailsLine1 = `${details.degree} - ${details.branch_code}`;
-                    detailsLine2 = `Year: ${details.year}`;
-                } else {
-                    detailsLine1 = details.designation;
-                    detailsLine2 = details.department_name;
-                }
-
-                cardHtml = `
-                    <div class="user-card">
-                        <div class="profile-pic">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1c1e21" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                        </div>
-                        <div class="user-details">
-                            <h2>${details.user_name}</h2>
-                            <p>${details.user_id}</p>
-                            <p>${detailsLine1}</p>
-                            <p>${detailsLine2}</p>
-                            <div class="status-banner ${statusClass}">${statusText}</div>
-                        </div>
-                    </div>
-                `;
-                
-                if (data.status === 'LOGIN') {
-                    const newRow = attendanceTableBody.insertRow(0);
-                    newRow.insertCell(0).innerHTML = details.user_id;
-                    newRow.insertCell(1).innerHTML = details.user_name;
-                    newRow.insertCell(2).innerHTML = data.time;
-                    newRow.insertCell(3).innerHTML = '---';
-                } else {
-                    const rows = attendanceTableBody.getElementsByTagName('tr');
-                    for (let i = 0; i < rows.length; i++) {
-                        if (rows[i].cells[0].textContent == details.user_id && rows[i].cells[3].textContent === '---') {
-                            rows[i].cells[3].innerHTML = data.time;
-                            break;
-                        }
-                    }
-                }
-
-            } else { 
-                let message = 'An error occurred.';
-                if (data.status === 'UNREGISTERED') message = '⚠️ Card not recognized. Please register.';
-                if (data.status === 'IGNORED') message = `🚫 ${data.message}`;
-
-                // MODIFIED: Added color:white to the inline style to ensure text is white
-                cardHtml = `<div class="user-card status-error" style="font-size: 1em; padding: 1.2em; color: white;">${message}</div>`;
-            }
-
+                const details = data.details; const statusClass = data.status === 'LOGIN' ? 'status-login' : 'status-logout'; const statusText = data.status === 'LOGIN' ? 'Welcome' : 'Thank You'; let detailsLine1 = ''; let detailsLine2 = '';
+                if (details.user_type === 'student') { detailsLine1 = `${details.degree} - ${details.branch_code}`; detailsLine2 = `Year: ${details.year}`; } else { detailsLine1 = details.designation; detailsLine2 = details.department_name; }
+                cardHtml = `<div class="user-card"><div class="profile-pic"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1c1e21" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div><div class="user-details"><h2>${details.user_name}</h2><p>${details.user_id}</p><p>${detailsLine1}</p><p>${detailsLine2}</p><div class="status-banner ${statusClass}">${statusText}</div></div></div>`;
+                if (data.status === 'LOGIN') { const newRow = attendanceTableBody.insertRow(0); newRow.insertCell(0).innerHTML = details.user_id; newRow.insertCell(1).innerHTML = details.user_name; newRow.insertCell(2).innerHTML = data.time; newRow.insertCell(3).innerHTML = '---'; }
+                else { const rows = attendanceTableBody.rows; for (let i = 0; i < rows.length; i++) { if (rows[i].cells[0].textContent == details.user_id && rows[i].cells[3].textContent === '---') { rows[i].cells[3].innerHTML = data.time; break; } } }
+            } else { let message = 'Error.'; if (data.status === 'UNREGISTERED') message = '⚠️ Card not recognized.'; if (data.status === 'IGNORED') message = `🚫 ${data.message}`; cardHtml = `<div class="user-card status-error" style="font-size: 1em; padding: 1.2em; color: white;">${message}</div>`; }
             welcomeContainer.innerHTML = cardHtml;
             welcomeTimeout = setTimeout(showDefaultWelcome, 7000);
         });
 
-
         function createOrUpdateChart(degree, branches) {
-            const chartId = `chart-${degree.toLowerCase()}`;
-            const ctx = document.getElementById(chartId);
-            if (!ctx) return;
-            const chartData = {
-                labels: branches.map(b => b.branch_code),
-                datasets: [{
-                    label: 'Visits',
-                    data: branches.map(b => b.visit_count),
-                    backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#7ACBF5', '#F57A9A', '#B2F57A'],
-                    hoverOffset: 4
-                }]
-            };
-            if (chartInstances[degree]) {
-                chartInstances[degree].data.labels = chartData.labels;
-                chartInstances[degree].data.datasets[0].data = chartData.datasets[0].data;
-                chartInstances[degree].update();
-            } else {
-                chartInstances[degree] = new Chart(ctx, {
-                    type: 'doughnut', data: chartData,
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'top' },
-                            tooltip: { callbacks: { label: (context) => ` ${context.label}: ${context.parsed || 0} student(s)` } }
-                        }
-                    }
-                });
-            }
+            const chartId = `chart-${degree.toLowerCase()}`; const ctx = document.getElementById(chartId); if (!ctx) return;
+            const chartData = { labels: branches.map(b => b.branch_code), datasets: [{ label: 'Visits', data: branches.map(b => b.visit_count), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#7ACBF5', '#F57A9A', '#B2F57A'], hoverOffset: 4 }] };
+            if (chartInstances[degree]) { chartInstances[degree].data = chartData; chartInstances[degree].update(); }
+            else { chartInstances[degree] = new Chart(ctx, { type: 'doughnut', data: chartData, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: (c) => ` ${c.label}: ${c.parsed || 0}` } } } } }); }
         }
         for (const degree in initialCounts) { createOrUpdateChart(degree, initialCounts[degree]); }
-        socket.on('counts_update', function(newCounts) {
-            for (const degree in newCounts) { createOrUpdateChart(degree, newCounts[degree]); }
-        });
+        socket.on('counts_update', function(newCounts) { for (const degree in newCounts) { createOrUpdateChart(degree, newCounts[degree]); } });
     </script>
 </body>
 </html>
