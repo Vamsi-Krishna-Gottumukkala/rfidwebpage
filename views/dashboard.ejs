@@ -24,14 +24,49 @@
         .panel { background: white; padding: 1.5em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2em; }
         
         #welcome-card-container { min-height: 120px; display: flex; justify-content: center; align-items: center; font-size: 1.2em; color: #65676b; overflow: hidden; }
-        .user-card { display: flex; align-items: center; gap: 1.2em; background-color: #fff; padding: 1em; border-radius: 12px; animation: slideIn 0.5s ease-out forwards; }
-        .profile-pic { width: 70px; height: 70px; border-radius: 50%; background-color: #e4e6eb; display: flex; justify-content: center; align-items: center; border: 3px solid #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        /* MODIFIED: Card layout changes */
+        .user-card {
+            display: flex;
+            flex-direction: column; /* Stack status and details */
+            align-items: stretch; /* Stretch to full width */
+            gap: 0; /* No gap */
+            background-color: #fff;
+            border-radius: 12px;
+            animation: slideIn 0.5s ease-out forwards;
+            min-width: 450px;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            overflow: hidden; /* Ensure banner fits */
+        }
+        .user-card-content {
+            display: flex;
+            align-items: center;
+            gap: 1.2em;
+            padding: 1.2em; /* Add padding to content area */
+        }
+        .profile-pic { width: 70px; height: 70px; border-radius: 50%; background-color: #e4e6eb; display: flex; justify-content: center; align-items: center; border: 3px solid #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); flex-shrink: 0; }
         .user-details h2 { margin: 0 0 0.25em 0; font-size: 1.3em; color: #1c1e21; }
         .user-details p { margin: 0.25em 0; font-size: 0.9em; color: #65676b; }
-        .status-banner { padding: 0.3em 0.7em; border-radius: 6px; color: white; font-weight: bold; display: inline-block; margin-top: 0.7em; font-size: 0.75em; }
+        
+        .status-banner {
+            padding: 0.8em 1.2em; /* Taller banner */
+            color: white;
+            font-weight: bold;
+            display: block;
+            text-align: center;
+            font-size: 1.1em; /* Bigger text */
+        }
+        /* Error message now uses status-banner styles */
+        .status-message {
+            font-size: 1em; padding: 1.2em; color: white;
+            border-radius: 12px;
+            animation: slideIn 0.5s ease-out forwards;
+        }
+        
         .status-login { background-color: #31a24c; }
         .status-logout { background-color: #65676b; }
-        .status-error { background-color: #f02849; }
+        .status-error { background-color: #f02849; } /* Red for error */
+        
         @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
         table { width: 100%; border-collapse: collapse; margin-top: 1em; }
@@ -43,9 +78,34 @@
         .chart-wrapper { margin-bottom: 2em; }
         .chart-wrapper h3 { text-align: center; margin-bottom: 1em; }
         .chart-container { position: relative; margin: auto; height: 250px; width: 100%; }
+        
+        .total-count { font-size: 1.5em; font-weight: bold; text-align: center; margin-bottom: 1em; }
+        .branch-count-list { list-style: none; padding: 0; margin: 1.5em 0 0 0; }
+        .branch-count-list li { display: flex; justify-content: space-between; font-size: 1.1em; padding: 0.8em; border-bottom: 1px solid #f0f2f5; }
+        .branch-count-list li:last-child { border-bottom: none; }
+        .branch-count-list .branch-name { font-weight: 500; }
+        .branch-count-list .branch-count { font-weight: bold; }
+
         @media (max-width: 1024px) { .main-layout { grid-template-columns: 1fr; } }
-        /* NEW: Added heading style */
-        .page-heading { text-align: center; color: #333; margin-top: 0.5em; margin-bottom: 1.5em; font-size: 1.8em; }
+        
+        /* NEW: Styles for page heading with total count */
+        .page-heading-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.5em;
+            margin-bottom: 1.5em;
+        }
+        .page-heading { font-size: 1.8em; color: #333; margin: 0; }
+        .total-count-display {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #1c1e21;
+            background: #fff;
+            padding: 0.5em 1em;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body>
@@ -55,22 +115,17 @@
                 <img src="/assets/gvplogo.png" alt="College Logo" class="nav-logo">
                 <span class="nav-brand-name">Gayatri Vidya Parishad College for Degree and P.G. Courses (A)</span>
             </div>
-                <div class="nav-links">
-                     <!-- Conditional Links based on res.locals.loggedIn -->
-                    <% if (loggedIn) { %>
-                        <!-- Links shown only when logged in -->
-                        <a href="/home">Home</a> <!-- Admin Home -->
-                        <a href="/dashboard">Live Dashboard</a>
-                        <!-- <a href="/manage-users">Manage Users</a> REMOVED -->
-                        <a href="/register">Register Card</a>
-                        <a href="/logout" class="logout-btn">Logout</a>
-                    <% } else { %>
-                        <!-- Links shown only when logged out -->
-                        <a href="/dashboard">Live Dashboard</a>
-                        <a href="/register">Register Card</a>
-                        <a href="/login" class="login-btn">Admin Login</a>
-                    <% } %>
-                </div>
+             <div class="nav-links">
+                <% if (loggedIn) { %>
+                    <a href="/home">Home</a>
+                    <a href="/dashboard">Live Dashboard</a>
+                    <a href="/register">Register Card</a>
+                    <a href="/logout" class="logout-btn">Logout</a>
+                <% } else { %>
+                    <a href="/dashboard">Live Dashboard</a>
+                    <a href="/register">Register Card</a>
+                    <a href="/login" class="login-btn">Admin Login</a>
+                <% } %>
             </div>
         </nav>
     </div>
@@ -82,8 +137,12 @@
             </div>
         </div>
         
-        <!-- NEW: Added Heading -->
-        <h2 class="page-heading">Library Gate Register</h2>
+        <div class="page-heading-container">
+            <h2 class="page-heading">Library Gate Register</h2>
+            <div class="total-count-display" id="total-student-count">
+                Total Student Visits: <%= totalStudentVisits %>
+            </div>
+        </div>
 
         <div class="main-layout">
             <div class="side-column">
@@ -97,6 +156,16 @@
                                 <div class="chart-container">
                                     <canvas id="chart-<%= degree.toLowerCase() %>"></canvas>
                                 </div>
+                                <ul class="branch-count-list" id="count-list-<%= degree.toLowerCase() %>">
+                                    <% if (counts[degree]) { %>
+                                        <% counts[degree].forEach(branch => { %>
+                                            <li>
+                                                <span class="branch-name"><%= branch.branch_code %>:</span>
+                                                <span class="branch-count"><%= branch.visit_count %></span>
+                                            </li>
+                                        <% }); %>
+                                    <% } %>
+                                </ul>
                             </div>
                         <% } %>
                     <% }); %>
@@ -107,12 +176,13 @@
                 <div class="panel">
                     <h2>Today's Attendance Log</h2>
                     <table id="attendance-table">
-                        <thead><tr><th>User ID</th><th>Name</th><th>Login</th><th>Logout</th></tr></thead>
+                        <thead><tr><th>User ID</th><th>Name</th><th>Branch</th><th>Year</th><th>Login</th><th>Logout</th></tr></thead>
                         <tbody>
                           <% logs.forEach(log => { %>
                               <tr>
                                   <td><%= log.user_id %></td>
                                   <td><%= log.user_name %></td>
+                                  <td><%= log.branch_code || 'N/A' %></td> <td><%= log.year || 'N/A' %></td>
                                   <td><%= log.login_time %></td>
                                   <td><%= log.logout_time || '---' %></td>
                               </tr>
@@ -133,6 +203,16 @@
                                 <div class="chart-container">
                                     <canvas id="chart-<%= degree.toLowerCase() %>"></canvas>
                                 </div>
+                                <ul class="branch-count-list" id="count-list-<%= degree.toLowerCase() %>">
+                                    <% if (counts[degree]) { %>
+                                        <% counts[degree].forEach(branch => { %>
+                                            <li>
+                                                <span class="branch-name"><%= branch.branch_code %>:</span>
+                                                <span class="branch-count"><%= branch.visit_count %></span>
+                                            </li>
+                                        <% }); %>
+                                    <% } %>
+                                </ul>
                             </div>
                         <% } %>
                     <% }); %>
@@ -150,20 +230,56 @@
         const chartInstances = {};
         let welcomeTimeout;
 
-        function showDefaultWelcome() {
-            welcomeContainer.innerHTML = 'Please scan your card';
-        }
+        function showDefaultWelcome() { welcomeContainer.innerHTML = 'Please scan your card'; }
 
         socket.on('scan_event', function(data) {
-            clearTimeout(welcomeTimeout);
-            let cardHtml = '';
+            clearTimeout(welcomeTimeout); let cardHtml = '';
             if (data.status === 'LOGIN' || data.status === 'LOGOUT') {
                 const details = data.details; const statusClass = data.status === 'LOGIN' ? 'status-login' : 'status-logout'; const statusText = data.status === 'LOGIN' ? 'Welcome' : 'Thank You'; let detailsLine1 = ''; let detailsLine2 = '';
                 if (details.user_type === 'student') { detailsLine1 = `${details.degree} - ${details.branch_code}`; detailsLine2 = `Year: ${details.year}`; } else { detailsLine1 = details.designation; detailsLine2 = details.department_name; }
-                cardHtml = `<div class="user-card"><div class="profile-pic"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1c1e21" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div><div class="user-details"><h2>${details.user_name}</h2><p>${details.user_id}</p><p>${detailsLine1}</p><p>${detailsLine2}</p><div class="status-banner ${statusClass}">${statusText}</div></div></div>`;
-                if (data.status === 'LOGIN') { const newRow = attendanceTableBody.insertRow(0); newRow.insertCell(0).innerHTML = details.user_id; newRow.insertCell(1).innerHTML = details.user_name; newRow.insertCell(2).innerHTML = data.time; newRow.insertCell(3).innerHTML = '---'; }
-                else { const rows = attendanceTableBody.rows; for (let i = 0; i < rows.length; i++) { if (rows[i].cells[0].textContent == details.user_id && rows[i].cells[3].textContent === '---') { rows[i].cells[3].innerHTML = data.time; break; } } }
-            } else { let message = 'Error.'; if (data.status === 'UNREGISTERED') message = '⚠️ Card not recognized.'; if (data.status === 'IGNORED') message = `🚫 ${data.message}`; cardHtml = `<div class="user-card status-error" style="font-size: 1em; padding: 1.2em; color: white;">${message}</div>`; }
+                
+                // MODIFIED: Card HTML structure changed for new UI
+                cardHtml = `
+                    <div class="user-card">
+                        <div class="status-banner ${statusClass}">${statusText}</div>
+                        <div class="user-card-content">
+                            <div class="profile-pic">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1c1e21" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            </div>
+                            <div class="user-details">
+                                <h2>${details.user_name}</h2>
+                                <p>${details.user_id}</p>
+                                <p>${detailsLine1}</p>
+                                <p>${detailsLine2}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // MODIFIED: Update table with new columns
+                if (data.status === 'LOGIN' && details.user_type === 'student') {
+                    const newRow = attendanceTableBody.insertRow(0);
+                    newRow.insertCell(0).innerHTML = details.user_id;
+                    newRow.insertCell(1).innerHTML = details.user_name;
+                    newRow.insertCell(2).innerHTML = details.branch_code || 'N/A'; // Use branch_code
+                    newRow.insertCell(3).innerHTML = details.year || 'N/A';
+                    newRow.insertCell(4).innerHTML = data.time;
+                    newRow.insertCell(5).innerHTML = '---';
+                } else if (data.status === 'LOGOUT') {
+                    const rows = attendanceTableBody.rows;
+                    for (let i = 0; i < rows.length; i++) {
+                        // Match on User ID (col 0) and check if Logout (col 5) is empty
+                        if (rows[i].cells[0].textContent == details.user_id && rows[i].cells[5].textContent === '---') {
+                            rows[i].cells[5].innerHTML = data.time;
+                            break;
+                        }
+                    }
+                }
+            } else { 
+                let message = 'Error.'; if (data.status === 'UNREGISTERED') message = '⚠️ Card not recognized.'; if (data.status === 'IGNORED') message = `🚫 ${data.message}`; 
+                // MODIFIED: Error card now uses status-banner
+                cardHtml = `<div class="status-banner status-error">${message}</div>`;
+            }
             welcomeContainer.innerHTML = cardHtml;
             welcomeTimeout = setTimeout(showDefaultWelcome, 7000);
         });
@@ -173,10 +289,38 @@
             const chartData = { labels: branches.map(b => b.branch_code), datasets: [{ label: 'Visits', data: branches.map(b => b.visit_count), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#7ACBF5', '#F57A9A', '#B2F57A'], hoverOffset: 4 }] };
             if (chartInstances[degree]) { chartInstances[degree].data = chartData; chartInstances[degree].update(); }
             else { chartInstances[degree] = new Chart(ctx, { type: 'doughnut', data: chartData, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: (c) => ` ${c.label}: ${c.parsed || 0}` } } } } }); }
+        
+            // NEW: Update the text list
+            const listId = `count-list-${degree.toLowerCase()}`;
+            const listEl = document.getElementById(listId);
+            if (listEl) {
+                listEl.innerHTML = ''; // Clear old list
+                branches.forEach(branch => {
+                    listEl.innerHTML += `<li><span class="branch-name">${branch.branch_code}:</span> <span class="branch-count">${branch.visit_count}</span></li>`;
+                });
+            }
         }
+        
         for (const degree in initialCounts) { createOrUpdateChart(degree, initialCounts[degree]); }
-        socket.on('counts_update', function(newCounts) { for (const degree in newCounts) { createOrUpdateChart(degree, newCounts[degree]); } });
+        
+        // MODIFIED: Socket listener now handles the new data structure
+        socket.on('counts_update', function(data) {
+            const newCounts = data.groupedCounts;
+            const totalVisits = data.totalStudentVisits;
+            
+            // Update total count display
+            const totalCountEl = document.getElementById('total-student-count');
+            if (totalCountEl) {
+                totalCountEl.textContent = `Total Student Visits: ${totalVisits}`;
+            }
+
+            // Update all charts and lists
+            for (const degree in newCounts) {
+                if(chartInstances[degree] || document.getElementById(`chart-${degree.toLowerCase()}`)) {
+                    createOrUpdateChart(degree, newCounts[degree]);
+                }
+            }
+        });
     </script>
 </body>
 </html>
-
