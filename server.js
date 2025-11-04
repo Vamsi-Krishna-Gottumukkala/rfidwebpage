@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -22,8 +24,7 @@ const scannedRecently = new Set();
 const SCAN_TIMEOUT_MS = 5000;
 
 const PORT = 3000;
-const ARDUINO_PORT = '/dev/ttyACM0'; //ubuntu
-// const ARDUINO_PORT = 'COM14'; //windows
+const ARDUINO_PORT = process.env.ARDUINO_PORT;
 
 const networkInterfaces = os.networkInterfaces();
 const localIp = Object.values(networkInterfaces)
