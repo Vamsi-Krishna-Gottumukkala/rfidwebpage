@@ -19,19 +19,21 @@
         @media (max-width: 900px) { .nav-brand-name { display: none; } .nav-links { gap: 1em; } }
 
         .panel { background: white; padding: 2em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2em; }
-
-        .date-presets { display: flex; gap: 1em; margin-bottom: 1.5em; flex-wrap: wrap; }
+        
+        .date-presets { display: flex; gap: 0.75em; margin-bottom: 1.5em; flex-wrap: wrap; }
         .preset-btn { background-color: #e4e6eb; color: #1c1e21; border: 1px solid #ccc; font-weight: bold; padding: 0.6em 1.2em; border-radius: 6px; font-size: 0.9em; cursor: pointer; }
         .preset-btn:hover { background-color: #d8dbdf; }
-        .form-container { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5em; align-items: end; margin-bottom: 2em; }
+        
+        /* MODIFIED: Form grid now supports 4 columns */
+        .form-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5em; align-items: end; margin-bottom: 2em; }
         .form-group { display: flex; flex-direction: column; }
         .form-group label { font-weight: bold; margin-bottom: 0.5em; }
-        .form-group input { padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
+        .form-group input, .form-group select { padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
         button { padding: 0.8em 1.5em; color: white; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; }
-        .btn-preview { background-color: #0866ff; }
+        .btn-preview { background-color: #0866ff; width: 100%; }
         .btn-download { background-color: #31a24c; }
         .results-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f0f2f5; padding-bottom: 1em; flex-wrap: wrap; gap: 1em; }
-
+        
         .count-display { font-size: 1.1em; display: flex; gap: 1.5em; flex-wrap: wrap; }
         .count-item { background-color: #f0f2f5; padding: 0.5em 1em; border-radius: 6px; }
         table { width: 100%; border-collapse: collapse; margin-top: 1em; }
@@ -47,27 +49,22 @@
                 <img src="/assets/gvplogo.png" alt="College Logo" class="nav-logo">
                 <span class="nav-brand-name">Gayatri Vidya Parishad College for Degree and P.G. Courses (A)</span>
             </div>
-                <div class="nav-links">
-                     <!-- Conditional Links based on res.locals.loggedIn -->
-                    <% if (loggedIn) { %>
-                        <!-- Links shown only when logged in -->
-                        <a href="/home">Home</a> <!-- Admin Home -->
-                        <a href="/dashboard">Live Dashboard</a>
-                        <!-- <a href="/manage-users">Manage Users</a> REMOVED -->
-                        <a href="/register">Register Card</a>
-                        <a href="/logout" class="logout-btn">Logout</a>
-                    <% } else { %>
-                        <!-- Links shown only when logged out -->
-                        <a href="/dashboard">Live Dashboard</a>
-                        <a href="/register">Register Card</a>
-                        <a href="/login" class="login-btn">Admin Login</a>
-                    <% } %>
-                </div>
+             <div class="nav-links">
+                <% if (loggedIn) { %>
+                    <a href="/home">Home</a>
+                    <a href="/dashboard">Live Dashboard</a>
+                    <a href="/register">Register Card</a>
+                    <a href="/logout" class="logout-btn">Logout</a>
+                <% } else { %>
+                    <a href="/dashboard">Live Dashboard</a>
+                    <a href="/register">Register Card</a>
+                    <a href="/login" class="login-btn">Admin Login</a>
+                <% } %>
+            </div>
         </nav>
     </div>
 
     <div class="container">
-         <!-- MODIFIED: Back link points to the action selection page -->
          <a href="/actions/<%= userType %>" class="back-link">&larr; Back to <%= userType.charAt(0).toUpperCase() + userType.slice(1) %> Actions</a>
         <div style="clear: both;"></div>
 
@@ -91,7 +88,21 @@
                         <label for="end_date">End Date:</label>
                         <input type="date" id="end_date" name="end_date" value="<%= filters ? filters.end_date : '' %>" required>
                     </div>
+                    <% if (userType === 'student') { %>
+                        <div class="form-group">
+                            <label for="branch_code">Branch:</label>
+                            <select id="branch_code" name="branch_code">
+                                <option value="all">All Branches</option>
+                                <% branches.forEach(branch => { %>
+                                    <option value="<%= branch.branch_code %>" <%= (filters && filters.branch_code === branch.branch_code) ? 'selected' : '' %>>
+                                        <%= branch.branch_name %> (<%= branch.branch_code %>)
+                                    </option>
+                                <% }); %>
+                            </select>
+                        </div>
+                    <% } %>
                     <div class="form-group">
+                        <label>&nbsp;</label>
                         <button type="submit" class="btn-preview">Preview Report</button>
                     </div>
                 </div>
@@ -103,12 +114,17 @@
                 <div class="results-header">
                     <h2>Report Preview</h2>
                     <div class="count-display">
+                        <% let totalCount = 0; %>
                         <% visitCounts.forEach(item => { %>
+                            <% totalCount += item.count; %>
                             <div class="count-item">
                                 <strong><%= item.degree || item.group_name %>:</strong> <%= item.count %>
                             </div>
                         <% }); %>
-                        <% if (!visitCounts || visitCounts.length === 0) { %> <!-- Check if visitCounts exists -->
+                        <div class="count-item" style="background-color: #333; color: white;">
+                            <strong>Total Visits:</strong> <%= totalCount %>
+                        </div>
+                        <% if (visitCounts.length === 0) { %>
                             <span>No visits found in this date range.</span>
                         <% } %>
                     </div>
@@ -117,6 +133,7 @@
                     <input type="hidden" name="user_type" value="<%= filters.user_type %>">
                     <input type="hidden" name="start_date" value="<%= filters.start_date %>">
                     <input type="hidden" name="end_date" value="<%= filters.end_date %>">
+                    <input type="hidden" name="branch_code" value="<%= filters.branch_code || 'all' %>">
                     <button type="submit" class="btn-download">Download as Excel</button>
                 </form>
                 <table>
@@ -136,8 +153,7 @@
                                 <td><%= row.user_id %></td>
                                 <td><%= row.user_name %></td>
                                 <td><%= row.group_name %></td>
-                                <!-- Ensure log_date is handled correctly -->
-                                <td><%= row.log_date ? new Date(row.log_date).toLocaleDateString() : 'N/A' %></td>
+                                <td><%= row.log_date %></td>
                                 <td><%= row.login_time %></td>
                                 <td><%= row.logout_time || 'N/A' %></td>
                             </tr>
@@ -147,17 +163,11 @@
             </div>
         <% } %>
     </div>
-
+    
     <script>
         const startDateInput = document.getElementById('start_date');
         const endDateInput = document.getElementById('end_date');
-
-        function formatDate(date) {
-            const offset = date.getTimezoneOffset() * 60000;
-            const adjustedDate = new Date(date.getTime() - offset);
-            return adjustedDate.toISOString().split('T')[0];
-        }
-
+        function formatDate(date) { const offset = date.getTimezoneOffset() * 60000; const adjustedDate = new Date(date.getTime() - offset); return adjustedDate.toISOString().split('T')[0]; }
         document.getElementById('todayBtn').addEventListener('click', () => { const today = new Date(); startDateInput.value = formatDate(today); endDateInput.value = formatDate(today); });
         document.getElementById('yesterdayBtn').addEventListener('click', () => { const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1); startDateInput.value = formatDate(yesterday); endDateInput.value = formatDate(yesterday); });
         document.getElementById('thisMonthBtn').addEventListener('click', () => { const now = new Date(); const firstDay = new Date(now.getFullYear(), now.getMonth(), 1); const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0); startDateInput.value = formatDate(firstDay); endDateInput.value = formatDate(lastDay); });
@@ -165,4 +175,3 @@
     </script>
 </body>
 </html>
-
