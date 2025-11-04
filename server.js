@@ -11,6 +11,7 @@ const path = require('path');
 const cron = require('node-cron');
 const fs = require('fs');
 const session = require('express-session');
+const os = require('os');
 // const bcrypt = require('bcrypt'); // Removed bcrypt
 
 const app = express();
@@ -21,8 +22,13 @@ const scannedRecently = new Set();
 const SCAN_TIMEOUT_MS = 5000;
 
 const PORT = 3000;
-const ARDUINO_PORT = '/dev/ttyACM0+'; //ubuntu
+const ARDUINO_PORT = '/dev/ttyACM0'; //ubuntu
 // const ARDUINO_PORT = 'COM14'; //windows
+
+const networkInterfaces = os.networkInterfaces();
+const localIp = Object.values(networkInterfaces)
+  .flat()
+  .find((iface) => iface.family === 'IPv4' && !iface.internal)?.address;
 
 const dbPool = mysql.createPool({
     host: 'localhost', user: 'root', password: '', database: 'library_system',
@@ -313,8 +319,8 @@ async function cleanupPreviousDays() { const today = format(new Date(), 'yyyy-MM
 cron.schedule('5 19 * * *', () => { console.log('Running daily auto-logout...'); autoLogoutCurrentDay(); }, { scheduled: true, timezone: "Asia/Kolkata" });
 
 // --- Start Server ---
-server.listen(PORT, () => {
-    console.log(`🚀 Server running! Dashboard at http://localhost:${PORT}/dashboard`);
-    cleanupPreviousDays(); // Run cleanup on startup
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running locally at: http://localhost:${PORT}/dashboard`);
+  console.log(`🌐 Access from other devices: http://${localIp}:${PORT}/dashboard`);
+  cleanupPreviousDays(); // Run cleanup on startup
 });
-
