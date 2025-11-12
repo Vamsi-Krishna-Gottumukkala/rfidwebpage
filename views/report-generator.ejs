@@ -25,10 +25,61 @@
         .preset-btn:hover { background-color: #d8dbdf; }
         
         /* MODIFIED: Form grid now supports 4 columns */
-        .form-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5em; align-items: end; margin-bottom: 2em; }
+        .form-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5em; align-items: end; margin-bottom: 2em; }
         .form-group { display: flex; flex-direction: column; }
         .form-group label { font-weight: bold; margin-bottom: 0.5em; }
         .form-group input, .form-group select { padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; font-size: 1em; }
+        
+        /* NEW: Styles for custom checkbox dropdown */
+        .checkbox-dropdown {
+            position: relative;
+        }
+        .dropdown-toggle {
+            padding: 0.8em;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1em;
+            background-color: white;
+            cursor: pointer;
+            text-align: left;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .dropdown-toggle:after {
+            content: '▼';
+            float: right;
+            font-size: 0.8em;
+            color: #65676b;
+        }
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            padding: 0.5em;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 100%;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+        .dropdown-menu label {
+            display: block;
+            padding: 0.5em;
+            font-weight: normal;
+            margin-bottom: 0;
+        }
+        .dropdown-menu label:hover {
+            background-color: #f0f2f5;
+        }
+        .dropdown-menu input[type="checkbox"] {
+            margin-right: 0.5em;
+        }
+
+
         button { padding: 0.8em 1.5em; color: white; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; }
         .btn-preview { background-color: #0866ff; width: 100%; }
         .btn-download { background-color: #31a24c; }
@@ -88,22 +139,43 @@
                         <label for="end_date">End Date:</label>
                         <input type="date" id="end_date" name="end_date" value="<%= filters ? filters.end_date : '' %>" required>
                     </div>
-                    <% if (userType === 'student') { %>
-                        <div class="form-group">
-                            <label for="branch_code">Branch:</label>
-                            <select id="branch_code" name="branch_code">
-                                <option value="all">All Branches</option>
-                                <% branches.forEach(branch => { %>
-                                    <option value="<%= branch.branch_code %>" <%= (filters && filters.branch_code === branch.branch_code) ? 'selected' : '' %>>
-                                        <%= branch.branch_name %> (<%= branch.branch_code %>)
-                                    </option>
-                                <% }); %>
-                            </select>
-                        </div>
-                    <% } %>
+                    
                     <div class="form-group">
-                        <label>&nbsp;</label>
-                        <button type="submit" class="btn-preview">Preview Report</button>
+                        <% if (userType === 'student') { %>
+                            <label for="branch-dropdown-toggle">Branch:</label>
+                            <div class="checkbox-dropdown" data-dropdown-id="branch-dropdown">
+                                <div class="dropdown-toggle" id="branch-dropdown-toggle" data-default-text="Select branches...">Select branches...</div>
+                                <div class="dropdown-menu" id="branch-dropdown-menu">
+                                    <label><input type="checkbox" name="branch_code" value="all" data-check-all> <strong>(Select All)</strong></label>
+                                    <% branches.forEach(branch => { %>
+                                        <label>
+                                            <input type="checkbox" name="branch_code" value="<%= branch.branch_code %>"
+                                            <%= (filters && filters.branch_code && (Array.isArray(filters.branch_code) ? filters.branch_code.includes(branch.branch_code) : filters.branch_code === branch.branch_code)) ? 'checked' : '' %>>
+                                            <%= branch.branch_name %> (<%= branch.branch_code %>)
+                                        </label>
+                                    <% }); %>
+                                </div>
+                            </div>
+                        <% } else { %>
+                            <label for="dept-dropdown-toggle">Department:</label>
+                            <div class="checkbox-dropdown" data-dropdown-id="dept-dropdown">
+                                <div class="dropdown-toggle" id="dept-dropdown-toggle" data-default-text="Select departments...">Select departments...</div>
+                                <div class="dropdown-menu" id="dept-dropdown-menu">
+                                    <label><input type="checkbox" name="department_id" value="all" data-check-all> <strong>(Select All)</strong></label>
+                                    <% departments.forEach(dept => { %>
+                                        <label>
+                                            <input type="checkbox" name="department_id" value="<%= dept.department_id %>"
+                                            <%= (filters && filters.department_id && (Array.isArray(filters.department_id) ? filters.department_id.includes(dept.department_id.toString()) : filters.department_id === dept.department_id.toString())) ? 'checked' : '' %>>
+                                            <%= dept.department_name %>
+                                        </label>
+                                    <% }); %>
+                                </div>
+                            </div>
+                        <% } %>
+                    </div>
+
+                    <div class="form-group">
+                        <label>&nbsp;</label> <button type="submit" class="btn-preview">Preview Report</button>
                     </div>
                 </div>
             </form>
@@ -133,7 +205,22 @@
                     <input type="hidden" name="user_type" value="<%= filters.user_type %>">
                     <input type="hidden" name="start_date" value="<%= filters.start_date %>">
                     <input type="hidden" name="end_date" value="<%= filters.end_date %>">
-                    <input type="hidden" name="branch_code" value="<%= filters.branch_code || 'all' %>">
+                    
+                    <% if (filters.branch_code) { %>
+                        <% if (Array.isArray(filters.branch_code)) { %>
+                            <% filters.branch_code.forEach(code => { %> <input type="hidden" name="branch_code[]" value="<%= code %>"> <% }); %>
+                        <% } else { %>
+                            <input type="hidden" name="branch_code[]" value="<%= filters.branch_code %>">
+                        <% } %>
+                    <% } %>
+                     <% if (filters.department_id) { %>
+                        <% if (Array.isArray(filters.department_id)) { %>
+                            <% filters.department_id.forEach(id => { %> <input type="hidden" name="department_id[]" value="<%= id %>"> <% }); %>
+                        <% } else { %>
+                            <input type="hidden" name="department_id[]" value="<%= filters.department_id %>">
+                        <% } %>
+                    <% } %>
+                    
                     <button type="submit" class="btn-download">Download as Excel</button>
                 </form>
                 <table>
@@ -165,6 +252,7 @@
     </div>
     
     <script>
+        // Date preset button logic
         const startDateInput = document.getElementById('start_date');
         const endDateInput = document.getElementById('end_date');
         function formatDate(date) { const offset = date.getTimezoneOffset() * 60000; const adjustedDate = new Date(date.getTime() - offset); return adjustedDate.toISOString().split('T')[0]; }
@@ -172,6 +260,79 @@
         document.getElementById('yesterdayBtn').addEventListener('click', () => { const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1); startDateInput.value = formatDate(yesterday); endDateInput.value = formatDate(yesterday); });
         document.getElementById('thisMonthBtn').addEventListener('click', () => { const now = new Date(); const firstDay = new Date(now.getFullYear(), now.getMonth(), 1); const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0); startDateInput.value = formatDate(firstDay); endDateInput.value = formatDate(lastDay); });
         document.getElementById('lastMonthBtn').addEventListener('click', () => { const now = new Date(); const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1); const lastDay = new Date(now.getFullYear(), now.getMonth(), 0); startDateInput.value = formatDate(firstDay); endDateInput.value = formatDate(lastDay); });
+
+        // NEW: Checkbox dropdown logic
+        document.querySelectorAll('.checkbox-dropdown').forEach(dropdown => {
+            const toggle = dropdown.querySelector('.dropdown-toggle');
+            const menu = dropdown.querySelector('.dropdown-menu');
+            const checkboxes = menu.querySelectorAll('input[type="checkbox"]');
+            const checkAll = menu.querySelector('input[data-check-all]');
+            const defaultText = toggle.dataset.defaultText;
+
+            function updateToggleText() {
+                const selected = [];
+                checkboxes.forEach(cb => {
+                    if (cb.checked && !cb.dataset.checkAll) {
+                        selected.push(cb.parentElement.textContent.trim().split('(')[0] || 'Item');
+                    }
+                });
+
+                if (checkAll.checked) {
+                    toggle.textContent = `All ${defaultText.split(' ')[1]} selected`;
+                } else if (selected.length === 0) {
+                    toggle.textContent = defaultText;
+                } else if (selected.length <= 2) {
+                    toggle.textContent = selected.join(', ');
+                } else {
+                    toggle.textContent = `${selected.length} items selected`;
+                }
+            }
+
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+            });
+            
+            checkAll.addEventListener('change', () => {
+                checkboxes.forEach(cb => {
+                    if(cb !== checkAll) cb.checked = checkAll.checked;
+                });
+                updateToggleText();
+            });
+
+            checkboxes.forEach(cb => {
+                if(cb !== checkAll) {
+                    cb.addEventListener('change', () => {
+                        if (!cb.checked) checkAll.checked = false;
+                        
+                        const allOthersChecked = [...checkboxes].filter(c => !c.dataset.checkAll).every(c => c.checked);
+                        if (allOthersChecked) {
+                            checkAll.checked = true;
+                        }
+                        updateToggleText();
+                    });
+                }
+            });
+            
+            // Stop clicks inside the menu from closing it
+            menu.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+
+            updateToggleText(); // Set initial text
+        });
+
+        // Close dropdowns if clicking outside
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                menu.style.display = 'none';
+            });
+        });
     </script>
+
+    <footer style="text-align: center; padding: 2em; color: #65676b; margin-top: 2em;">
+        2025 GVPCDPGC Library Gate Register | Developed by 
+        <a href="/credits" style="color: #0866ff; text-decoration: none; font-weight: 500;">G. Vamsi Krishna & M. Lokesh Reddy</a>
+    </footer>
 </body>
 </html>
