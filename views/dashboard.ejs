@@ -5,6 +5,7 @@
     <title>Live Library Dashboard</title>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <style>
         body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; }
         .container { max-width: 90%; margin: auto; padding: 2em; }
@@ -24,48 +25,16 @@
         .panel { background: white; padding: 1.5em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2em; }
         
         #welcome-card-container { min-height: 120px; display: flex; justify-content: center; align-items: center; font-size: 1.2em; color: #65676b; overflow: hidden; }
-        /* MODIFIED: Card layout changes */
-        .user-card {
-            display: flex;
-            flex-direction: column; /* Stack status and details */
-            align-items: stretch; /* Stretch to full width */
-            gap: 0; /* No gap */
-            background-color: #fff;
-            border-radius: 12px;
-            animation: slideIn 0.5s ease-out forwards;
-            min-width: 450px;
-            border: 1px solid #ddd;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-            overflow: hidden; /* Ensure banner fits */
-        }
-        .user-card-content {
-            display: flex;
-            align-items: center;
-            gap: 1.2em;
-            padding: 1.2em; /* Add padding to content area */
-        }
-        .profile-pic { width: 70px; height: 70px; border-radius: 50%; background-color: #e4e6eb; display: flex; justify-content: center; align-items: center; border: 3px solid #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); flex-shrink: 0; }
+        .user-card { display: flex; flex-direction: column; align-items: stretch; gap: 0; background-color: #fff; border-radius: 12px; animation: slideIn 0.5s ease-out forwards; min-width: 400px; border: 1px solid #ddd; box-shadow: 0 4px 8px rgba(0,0,0,0.05); overflow: hidden; }
+        .user-card-content { display: flex; align-items: center; gap: 1.2em; padding: 1.2em; }
+        .profile-pic { width: 70px; height: 70px; border-radius: 50%; background-color: #e4e6eb; display: flex; justify-content: center; align-items: center; flex-shrink: 0; }
         .user-details h2 { margin: 0 0 0.25em 0; font-size: 1.3em; color: #1c1e21; }
         .user-details p { margin: 0.25em 0; font-size: 0.9em; color: #65676b; }
         
-        .status-banner {
-            padding: 0.8em 1.2em; /* Taller banner */
-            color: white;
-            font-weight: bold;
-            display: block;
-            text-align: center;
-            font-size: 1.1em; /* Bigger text */
-        }
-        /* Error message now uses status-banner styles */
-        .status-message {
-            font-size: 1em; padding: 1.2em; color: white;
-            border-radius: 12px;
-            animation: slideIn 0.5s ease-out forwards;
-        }
-        
+        .status-banner { padding: 0.8em 1.2em; color: white; font-weight: bold; display: block; text-align: center; font-size: 1.2em; }
         .status-login { background-color: #31a24c; }
         .status-logout { background-color: #65676b; }
-        .status-error { background-color: #f02849; } /* Red for error */
+        .status-error { background-color: #f02849; }
         
         @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
@@ -77,35 +46,64 @@
         .side-column h2, .center-column h2 { text-align: center; margin-top: 0; }
         .chart-wrapper { margin-bottom: 2em; }
         .chart-wrapper h3 { text-align: center; margin-bottom: 1em; }
-        .chart-container { position: relative; margin: auto; height: 250px; width: 100%; }
+        .chart-container { position: relative; margin: auto; height: 200px; width: 100%; max-width: 200px; }
         
-        .total-count { font-size: 1.5em; font-weight: bold; text-align: center; margin-bottom: 1em; }
-        .branch-count-list { list-style: none; padding: 0; margin: 1.5em 0 0 0; }
-        .branch-count-list li { display: flex; justify-content: space-between; font-size: 1.1em; padding: 0.8em; border-bottom: 1px solid #f0f2f5; }
-        .branch-count-list li:last-child { border-bottom: none; }
-        .branch-count-list .branch-name { font-weight: 500; }
-        .branch-count-list .branch-count { font-weight: bold; }
+        .chart-and-legend { display: grid; grid-template-columns: 200px 1fr; align-items: center; gap: 1.5em; }
+        .chart-legend { list-style: none; padding: 0; margin: 0; }
+        .chart-legend li { display: flex; align-items: center; font-size: 0.95em; padding: 0.4em 0; }
+        .legend-color-box { width: 15px; height: 15px; border-radius: 3px; margin-right: 8px; flex-shrink: 0; }
+        .chart-legend .branch-name { font-weight: 500; }
+        .chart-legend .branch-count { font-weight: bold; margin-left: auto; }
 
-        @media (max-width: 1024px) { .main-layout { grid-template-columns: 1fr; } }
+        @media (max-width: 1200px) { .main-layout { grid-template-columns: 1fr 1.5fr 1fr; } .chart-and-legend { grid-template-columns: 1fr; } .chart-container { max-width: 200px; } }
+        @media (max-width: 1024px) { .main-layout { grid-template-columns: 1fr; } .chart-and-legend { grid-template-columns: 200px 1fr; } }
+        @media (max-width: 600px) { .chart-and-legend { grid-template-columns: 1fr; } }
         
-        /* NEW: Styles for page heading with total count */
-        .page-heading-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 0.5em;
-            margin-bottom: 1.5em;
+        .heading-container { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1em; margin-bottom: 1.5em; }
+        .page-heading { text-align: left; color: #333; margin: 0; font-size: 1.8em; }
+        .total-count-heading { font-size: 1.5em; font-weight: bold; color: #1c1e21; white-space: nowrap; }
+
+        /* MODIFIED: Updated small logout button for icon */
+        .btn-logout-small {
+            background-color: #f02849;
+            color: white;
+            border: none;
+            padding: 0.5em 0.7em; /* Adjusted padding for icon */
+            border-radius: 4px;
+            font-size: 0.9em;
+            cursor: pointer;
+            line-height: 1; /* Aligns icon vertically */
         }
-        .page-heading { font-size: 1.8em; color: #333; margin: 0; }
-        .total-count-display {
-            font-size: 1.5em;
+        .btn-logout-small svg { vertical-align: middle; }
+        
+        .btn-logout-all {
+            background-color: #0866ff;
+            color: white;
+            border: none;
+            padding: 0.8em 1.5em;
+            border-radius: 6px;
+            font-size: 1em;
             font-weight: bold;
-            color: #1c1e21;
-            background: #fff;
-            padding: 0.5em 1em;
+            cursor: pointer;
+            margin-bottom: 1em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5em;
+            width: 100%;
+        }
+        
+        .credits-link {
+            text-align: center;
+            padding: 0.5em;
+            margin-bottom: 2em;
+            background-color: #fff;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            color: #65676b;
         }
+        .credits-link a { color: #0866ff; text-decoration: none; font-weight: 500; }
+        
     </style>
 </head>
 <body>
@@ -131,17 +129,20 @@
     </div>
 
     <div class="container">
+        <div class="credits-link">
+            2025 GVPCDPGC Library Gate Register | Developed by 
+            <a href="/credits">G. Vamsi Krishna & M. Lokesh Reddy</a>
+        </div>
+        
         <div class="panel">
             <div id="welcome-card-container">
                 Please scan your card
             </div>
         </div>
         
-        <div class="page-heading-container">
+        <div class="heading-container">
             <h2 class="page-heading">Library Gate Register</h2>
-            <div class="total-count-display" id="total-student-count">
-                Total Student Visits: <%= totalStudentVisits %>
-            </div>
+            <div class="total-count-heading" id="total-student-count-heading">Total Student Visits Today: <%= totalStudentVisits %></div>
         </div>
 
         <div class="main-layout">
@@ -153,19 +154,13 @@
                         <% if (ug_degrees.includes(degree)) { %>
                             <div class="chart-wrapper">
                                 <h3><%= degree %></h3>
-                                <div class="chart-container">
-                                    <canvas id="chart-<%= degree.toLowerCase() %>"></canvas>
+                                <div class="chart-and-legend">
+                                    <div class="chart-container">
+                                        <canvas id="chart-<%= degree.toLowerCase() %>"></canvas>
+                                    </div>
+                                    <ul class="chart-legend" id="legend-<%= degree.toLowerCase() %>">
+                                        </ul>
                                 </div>
-                                <ul class="branch-count-list" id="count-list-<%= degree.toLowerCase() %>">
-                                    <% if (counts[degree]) { %>
-                                        <% counts[degree].forEach(branch => { %>
-                                            <li>
-                                                <span class="branch-name"><%= branch.branch_code %>:</span>
-                                                <span class="branch-count"><%= branch.visit_count %></span>
-                                            </li>
-                                        <% }); %>
-                                    <% } %>
-                                </ul>
                             </div>
                         <% } %>
                     <% }); %>
@@ -175,16 +170,37 @@
             <div class="center-column">
                 <div class="panel">
                     <h2>Today's Attendance Log</h2>
+                    <% if (loggedIn) { %>
+                        <form action="/logout-all" method="POST" onsubmit="return confirm('Are you sure you want to log out all currently active students?');">
+                            <button type="submit" class="btn-logout-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                                <span>Logout All Active Students</span>
+                            </button>
+                        </form>
+                    <% } %>
                     <table id="attendance-table">
-                        <thead><tr><th>User ID</th><th>Name</th><th>Branch</th><th>Year</th><th>Login</th><th>Logout</th></tr></thead>
+                        <thead><tr><th>User ID</th><th>Name</th><th>Branch</th><th>Year</th><th>Login</th><th>Logout</th><% if (loggedIn) { %><th>Actions</th><% } %></tr></thead>
                         <tbody>
                           <% logs.forEach(log => { %>
-                              <tr>
+                              <tr id="log-row-<%= log.log_id %>">
                                   <td><%= log.user_id %></td>
                                   <td><%= log.user_name %></td>
-                                  <td><%= log.branch_code || 'N/A' %></td> <td><%= log.year || 'N/A' %></td>
+                                  <td><%= log.branch_name || 'N/A' %></td>
+                                  <td><%= log.year || 'N/A' %></td>
                                   <td><%= log.login_time %></td>
-                                  <td><%= log.logout_time || '---' %></td>
+                                  <td class="logout-time"><%= log.logout_time || '---' %></td>
+                                  <% if (loggedIn) { %>
+                                    <td class="logout-action">
+                                        <% if (!log.logout_time) { %>
+                                            <form action="/logout-user" method="POST">
+                                                <input type="hidden" name="log_id" value="<%= log.log_id %>">
+                                                <button type="submit" class="btn-logout-small" title="Logout <%= log.user_name %>">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                                                </button>
+                                            </form>
+                                        <% } %>
+                                    </td>
+                                  <% } %>
                               </tr>
                           <% }); %>
                         </tbody>
@@ -200,19 +216,13 @@
                         <% if (pg_degrees.includes(degree)) { %>
                             <div class="chart-wrapper">
                                 <h3><%= degree %></h3>
-                                <div class="chart-container">
-                                    <canvas id="chart-<%= degree.toLowerCase() %>"></canvas>
+                                <div class="chart-and-legend">
+                                    <div class="chart-container">
+                                        <canvas id="chart-<%= degree.toLowerCase() %>"></canvas>
+                                    </div>
+                                    <ul class="chart-legend" id="legend-<%= degree.toLowerCase() %>">
+                                        </ul>
                                 </div>
-                                <ul class="branch-count-list" id="count-list-<%= degree.toLowerCase() %>">
-                                    <% if (counts[degree]) { %>
-                                        <% counts[degree].forEach(branch => { %>
-                                            <li>
-                                                <span class="branch-name"><%= branch.branch_code %>:</span>
-                                                <span class="branch-count"><%= branch.visit_count %></span>
-                                            </li>
-                                        <% }); %>
-                                    <% } %>
-                                </ul>
                             </div>
                         <% } %>
                     <% }); %>
@@ -221,7 +231,34 @@
         </div>
     </div>
 
+    <footer style="text-align: center; padding: 2em; color: #65676b; margin-top: 2em;">
+        2025 GVPCDPGC Library Gate Register | Developed by 
+        <a href="/credits" style="color: #0866ff; text-decoration: none; font-weight: 500;">G. Vamsi Krishna & M. Lokesh Reddy</a>
+    </footer>
+
     <script>
+        Chart.register(ChartDataLabels);
+        Chart.register({
+            id: 'textCenter',
+            beforeDraw: function(chart) {
+                if (chart.config.options.plugins.textCenter) {
+                    let ctx = chart.ctx;
+                    let centerConfig = chart.config.options.plugins.textCenter;
+                    let fontStyle = centerConfig.fontStyle || 'bold';
+                    let txt = centerConfig.text;
+                    let color = centerConfig.color || '#000';
+                    let fontSize = (chart.height / 114).toFixed(2);
+                    ctx.font = `${fontStyle} ${fontSize}em sans-serif`;
+                    ctx.fillStyle = color;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    let x = chart.width / 2;
+                    let y = chart.height / 2;
+                    ctx.fillText(txt, x, y);
+                }
+            }
+        });
+
         const socket = io();
         const welcomeContainer = document.getElementById('welcome-card-container');
         const attendanceTableBody = document.getElementById('attendance-table').getElementsByTagName('tbody')[0];
@@ -232,13 +269,39 @@
 
         function showDefaultWelcome() { welcomeContainer.innerHTML = 'Please scan your card'; }
 
+        // Function to create/update the legend list
+        function updateLegend(legendId, labels, data, colors) {
+            const legendEl = document.getElementById(legendId);
+            if (!legendEl) return;
+            legendEl.innerHTML = ''; // Clear old legend
+            let hasData = false;
+            labels.forEach((label, index) => {
+                const count = data[index];
+                if (count > 0) { // Only show branches with visits
+                    hasData = true;
+                    legendEl.innerHTML += `
+                        <li>
+                            <span class="legend-color-box" style="background-color: ${colors[index % colors.length]}"></span>
+                            <span class="branch-name">${label}:</span>
+                            <span class="branch-count">${count}</span>
+                        </li>`;
+                }
+            });
+            if (!hasData) {
+                legendEl.innerHTML = '<li>No visits yet.</li>';
+            }
+        }
+        
+        function getTotal(data) {
+            return data.reduce((acc, value) => acc + value, 0);
+        }
+
         socket.on('scan_event', function(data) {
             clearTimeout(welcomeTimeout); let cardHtml = '';
             if (data.status === 'LOGIN' || data.status === 'LOGOUT') {
                 const details = data.details; const statusClass = data.status === 'LOGIN' ? 'status-login' : 'status-logout'; const statusText = data.status === 'LOGIN' ? 'Welcome' : 'Thank You'; let detailsLine1 = ''; let detailsLine2 = '';
                 if (details.user_type === 'student') { detailsLine1 = `${details.degree} - ${details.branch_code}`; detailsLine2 = `Year: ${details.year}`; } else { detailsLine1 = details.designation; detailsLine2 = details.department_name; }
                 
-                // MODIFIED: Card HTML structure changed for new UI
                 cardHtml = `
                     <div class="user-card">
                         <div class="status-banner ${statusClass}">${statusText}</div>
@@ -256,70 +319,108 @@
                     </div>
                 `;
                 
-                // MODIFIED: Update table with new columns
                 if (data.status === 'LOGIN' && details.user_type === 'student') {
                     const newRow = attendanceTableBody.insertRow(0);
+                    newRow.id = `log-row-${data.details.log_id}`;
                     newRow.insertCell(0).innerHTML = details.user_id;
                     newRow.insertCell(1).innerHTML = details.user_name;
-                    newRow.insertCell(2).innerHTML = details.branch_code || 'N/A'; // Use branch_code
+                    newRow.insertCell(2).innerHTML = details.branch_name || 'N/A';
                     newRow.insertCell(3).innerHTML = details.year || 'N/A';
                     newRow.insertCell(4).innerHTML = data.time;
+                    newRow.insertCell(5).classList.add('logout-time');
                     newRow.insertCell(5).innerHTML = '---';
+                    <% if (loggedIn) { %> 
+                        newRow.insertCell(6).classList.add('logout-action');
+                        newRow.insertCell(6).innerHTML = `
+                            <form action="/logout-user" method="POST" class="logout-form">
+                                <input type="hidden" name="log_id" value="${data.details.log_id}">
+                                <button type="submit" class="btn-logout-small" title="Logout ${details.user_name}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                                </button>
+                            </form>
+                        `;
+                    <% } %>
                 } else if (data.status === 'LOGOUT') {
                     const rows = attendanceTableBody.rows;
                     for (let i = 0; i < rows.length; i++) {
-                        // Match on User ID (col 0) and check if Logout (col 5) is empty
                         if (rows[i].cells[0].textContent == details.user_id && rows[i].cells[5].textContent === '---') {
                             rows[i].cells[5].innerHTML = data.time;
+                            <% if (loggedIn) { %> rows[i].cells[6].innerHTML = ''; <% } %>
                             break;
                         }
                     }
                 }
             } else { 
                 let message = 'Error.'; if (data.status === 'UNREGISTERED') message = '⚠️ Card not recognized.'; if (data.status === 'IGNORED') message = `🚫 ${data.message}`; 
-                // MODIFIED: Error card now uses status-banner
-                cardHtml = `<div class="status-banner status-error">${message}</div>`;
+                cardHtml = `<div class="user-card status-error" style="font-size: 1.1em; padding: 1.2em; color: white; text-align: center;">${message}</div>`; 
             }
             welcomeContainer.innerHTML = cardHtml;
             welcomeTimeout = setTimeout(showDefaultWelcome, 7000);
         });
 
         function createOrUpdateChart(degree, branches) {
-            const chartId = `chart-${degree.toLowerCase()}`; const ctx = document.getElementById(chartId); if (!ctx) return;
-            const chartData = { labels: branches.map(b => b.branch_code), datasets: [{ label: 'Visits', data: branches.map(b => b.visit_count), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#7ACBF5', '#F57A9A', '#B2F57A'], hoverOffset: 4 }] };
-            if (chartInstances[degree]) { chartInstances[degree].data = chartData; chartInstances[degree].update(); }
-            else { chartInstances[degree] = new Chart(ctx, { type: 'doughnut', data: chartData, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: (c) => ` ${c.label}: ${c.parsed || 0}` } } } } }); }
-        
-            // NEW: Update the text list
-            const listId = `count-list-${degree.toLowerCase()}`;
-            const listEl = document.getElementById(listId);
-            if (listEl) {
-                listEl.innerHTML = ''; // Clear old list
-                branches.forEach(branch => {
-                    listEl.innerHTML += `<li><span class="branch-name">${branch.branch_code}:</span> <span class="branch-count">${branch.visit_count}</span></li>`;
-                });
+            const chartId = `chart-${degree.toLowerCase()}`; 
+            const legendId = `legend-${degree.toLowerCase()}`;
+            const ctx = document.getElementById(chartId); 
+            if (!ctx) return;
+            
+            const labels = branches.map(b => b.branch_code);
+            const data = branches.map(b => b.visit_count);
+            const total = getTotal(data);
+            const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#7ACBF5', '#F57A9A', '#B2F57A'];
+
+            const chartData = { labels: labels, datasets: [{ label: 'Visits', data: data, backgroundColor: colors, hoverOffset: 4 }] };
+            
+            if (chartInstances[degree]) { 
+                chartInstances[degree].data = chartData;
+                chartInstances[degree].options.plugins.textCenter.text = total > 0 ? total : ''; 
+                chartInstances[degree].update(); 
+            } else { 
+                chartInstances[degree] = new Chart(ctx, { 
+                    type: 'doughnut', 
+                    data: chartData, 
+                    options: { 
+                        responsive: true, maintainAspectRatio: false,
+                        cutout: '60%',
+                        plugins: { 
+                            legend: { display: false }, 
+                            tooltip: { callbacks: { label: (c) => ` ${c.label}: ${c.parsed || 0}` } },
+                            datalabels: {
+                                color: '#fff',
+                                font: { weight: 'bold', size: 14 },
+                                formatter: (value) => { return value > 0 ? value : ''; }
+                            },
+                            textCenter: {
+                                text: total > 0 ? total : '',
+                                color: '#1c1e21',
+                                fontStyle: 'bold'
+                            }
+                        } 
+                    } 
+                }); 
             }
+            
+            updateLegend(legendId, labels, data, colors);
         }
         
         for (const degree in initialCounts) { createOrUpdateChart(degree, initialCounts[degree]); }
         
-        // MODIFIED: Socket listener now handles the new data structure
         socket.on('counts_update', function(data) {
             const newCounts = data.groupedCounts;
             const totalVisits = data.totalStudentVisits;
             
-            // Update total count display
-            const totalCountEl = document.getElementById('total-student-count');
+            const totalCountEl = document.getElementById('total-student-count-heading');
             if (totalCountEl) {
-                totalCountEl.textContent = `Total Student Visits: ${totalVisits}`;
+                totalCountEl.textContent = `Total Student Visits Today: ${totalVisits}`;
             }
 
-            // Update all charts and lists
-            for (const degree in newCounts) {
-                if(chartInstances[degree] || document.getElementById(`chart-${degree.toLowerCase()}`)) {
-                    createOrUpdateChart(degree, newCounts[degree]);
+            let allDegrees = new Set([...Object.keys(chartInstances), ...Object.keys(newCounts)]);
+            allDegrees.forEach(degree => {
+                const chartData = newCounts[degree] || []; 
+                if(document.getElementById(`chart-${degree.toLowerCase()}`)) {
+                     createOrUpdateChart(degree, chartData);
                 }
-            }
+            });
         });
     </script>
 </body>
