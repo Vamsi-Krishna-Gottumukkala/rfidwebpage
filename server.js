@@ -15,6 +15,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const session = require('express-session');
 const os = require('os'); // To find local IP
+// const bcrypt = require('bcrypt'); // Removed as per request
 
 const app = express();
 const server = http.createServer(app);
@@ -24,10 +25,9 @@ const scannedRecently = new Set();
 const SCAN_TIMEOUT_MS = 5000;
 
 const PORT = 3000;
-// MODIFIED: Load from .env, with a fallback
+// MODIFIED: Load from .env
 const ARDUINO_PORT = process.env.ARDUINO_PORT || 'COM17'; 
 
-// MODIFIED: Get local IP for network access message
 const networkInterfaces = os.networkInterfaces();
 const localIp = Object.values(networkInterfaces)
   .flat()
@@ -42,7 +42,7 @@ const dbPool = mysql.createPool({
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-    dateStrings: true // Return DATE/TIME fields as strings
+    dateStrings: true 
 });
 
 app.set('view engine', 'ejs');
@@ -51,7 +51,7 @@ app.use(express.static('public'));
 
 // --- Session Configuration ---
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'fallback_secret_key_change_me', // Load from .env
+    secret: process.env.SESSION_SECRET || 'fallback_secret_key_change_me', 
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 } 
@@ -66,9 +66,12 @@ app.use((req, res, next) => {
 
 // --- Authentication Middleware ---
 const isAuthenticated = (req, res, next) => {
+    // Log session check
+    console.log(`[Auth Check] Path: ${req.path}, Session User:`, req.session.user);
     if (req.session.user) {
         next();
     } else {
+        console.log('[Auth Check] FAILED. Redirecting to /login.');
         res.redirect('/login?error=Please login to access this page.');
     }
 };
@@ -86,17 +89,22 @@ async function handleCardScan(uid) {
         eventData.details = userRows[0];
         const [openLogins] = await dbPool.query("SELECT log_id FROM attendance_log WHERE user_id = ? AND log_date = ? AND logout_time IS NULL LIMIT 1", [user_id, currentDate]);
         if (openLogins.length > 0) { await dbPool.query("UPDATE attendance_log SET logout_time = ? WHERE log_id = ?", [currentTime, openLogins[0].log_id]); eventData.status = 'LOGOUT'; eventData.time = currentTime; io.emit('scan_event', eventData); }
-        else { await dbPool.query("INSERT INTO attendance_log (user_id, log_date, login_time) VALUES (?, ?, ?)", [user_id, currentDate, currentTime]); eventData.status = 'LOGIN'; eventData.time = currentTime; io.emit('scan_event', eventData); const counts = await getTodayBranchCounts(); io.emit('counts_update', counts); }
+        else { 
+            const [result] = await dbPool.query("INSERT INTO attendance_log (user_id, log_date, login_time) VALUES (?, ?, ?)", [user_id, currentDate, currentTime]);
+            eventData.details.log_id = result.insertId; // Send log_id back to client
+            eventData.status = 'LOGIN'; 
+            eventData.time = currentTime; 
+            io.emit('scan_event', eventData); 
+            const counts = await getTodayBranchCounts(); 
+            io.emit('counts_update', counts); 
+        }
     } catch (error) { console.error("DB/Logic Error:", error); eventData.status = 'ERROR'; io.emit('scan_event', eventData); }
 }
 
-// MODIFIED: Function now also returns totalStudentVisits
 async function getTodayBranchCounts() {
     const today = format(new Date(), 'yyyy-MM-dd'); const [flatCounts] = await dbPool.query(`SELECT p.degree, p.branch_code, COUNT(al.log_id) as visit_count FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN programs p ON u.program_id = p.program_id WHERE al.log_date = ? AND u.user_type = 'student' GROUP BY p.degree, p.branch_code ORDER BY p.degree, p.branch_code`, [today]);
-    
     const groupedCounts = {};
-    let totalStudentVisits = 0; // NEW: Total count accumulator
-
+    let totalStudentVisits = 0; 
     for (const row of flatCounts) {
         if (!groupedCounts[row.degree]) {
             groupedCounts[row.degree] = [];
@@ -105,9 +113,9 @@ async function getTodayBranchCounts() {
             branch_code: row.branch_code,
             visit_count: row.visit_count
         });
-        totalStudentVisits += row.visit_count; // Add to total
+        totalStudentVisits += row.visit_count; 
     }
-    return { groupedCounts, totalStudentVisits }; // Return object
+    return { groupedCounts, totalStudentVisits }; 
 }
 
 // --- Serial Port Connection ---
@@ -125,14 +133,13 @@ app.get('/', (req, res) => {
 
 // --- Public Routes ---
 
-// MODIFIED: Dashboard query now fetches branch_code and year
 app.get('/dashboard', async (req, res) => {
     try {
         const today = format(new Date(), 'yyyy-MM-dd');
         const [todaysLog] = await dbPool.query(`
             SELECT 
-                al.user_id, al.login_time, al.logout_time, u.user_name,
-                p.branch_code, u.year
+                al.log_id, al.user_id, al.login_time, al.logout_time, u.user_name,
+                p.branch_name, u.year
             FROM attendance_log al 
             JOIN users u ON al.user_id = u.user_id 
             LEFT JOIN programs p ON u.program_id = p.program_id
@@ -163,51 +170,67 @@ app.post('/add', async (req, res) => {
     catch (err) { if (err.code === 'ER_DUP_ENTRY') return res.redirect('/register?error=Duplicate User ID or UID.'); if (err.code === 'ER_NO_REFERENCED_ROW_2') return res.redirect(`/register?error=User ID ${user_id} does not exist.`); res.redirect('/register?error=Database error.'); }
 });
 
+app.get('/credits', (req, res) => {
+    res.render('credits'); 
+});
+
 // --- Login/Logout ---
 app.get('/login', (req, res) => {
     if (req.session.user) return res.redirect('/home');
     res.render('login', { messages: req.query });
 });
 
-// MODIFIED: This is the login fix.
+// MODIFIED: Switched to req.session.save() to fix login redirect issue
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
+    console.log(`[Login Attempt] User: ${username}`); 
     if (!username || !password) {
         return res.redirect('/login?error=Username and password are required.');
     }
     try {
         const [rows] = await dbPool.query('SELECT username, password, role, user_id FROM credentials WHERE username = ?', [username]);
         if (rows.length === 0) {
+            console.log(`[Login Failed] User not found: ${username}`);
             return res.redirect('/login?error=Invalid username or password.');
         }
         const user = rows[0];
 
         // --- Plain Text Password Check (INSECURE) ---
         if (password === user.password) {
-            // Store user info in session
+            console.log(`[Login Success] User: ${username}`);
+            // --- End Direct Comparison ---
+
             req.session.user = { username: user.username, role: user.role, linked_user_id: user.user_id };
 
-            // Explicitly save the session, THEN redirect
+            // Save the session explicitly before redirecting
             req.session.save((err) => {
                 if (err) {
                     console.error('Session save error:', err);
                     return res.redirect('/login?error=Session error during save.');
                 }
-                // Session is saved, now redirect.
-                res.redirect('/home');
+                console.log(`[Login Success] Session saved for ${username}. Redirecting to /home.`);
+                res.redirect('/home'); // Redirect AFTER session is saved
             });
-
         } else {
+            console.log(`[Login Failed] Invalid password for user: ${username}`);
             res.redirect('/login?error=Invalid username or password.');
         }
     } catch (error) {
-        console.error('Login error:', error);
+        console.error('[Login Error] Database or other error:', error);
         res.redirect('/login?error=An error occurred during login.');
     }
 });
 
+
 app.get('/logout', (req, res) => {
-    req.session.destroy((err) => { if (err) { console.error("Logout error:", err); } res.clearCookie('connect.sid'); res.redirect('/login'); });
+    const username = req.session.user ? req.session.user.username : 'Unknown';
+    console.log(`[Logout Attempt] User: ${username}`);
+    req.session.destroy((err) => {
+        if (err) { console.error("Logout error:", err); }
+        res.clearCookie('connect.sid'); 
+        console.log(`[Logout Success] Session destroyed for ${username}. Redirecting to /login.`);
+        res.redirect('/login');
+    });
 });
 
 
@@ -223,77 +246,111 @@ app.get('/actions/:userType', isAuthenticated, (req, res) => {
     res.render('action-selection', { userType });
 });
 
-// MODIFIED: Report generation routes now fetch branches/depts for the dropdown
+// MODIFIED: Branch dropdown added to student reports
 app.get('/reports/student', isAuthenticated, async (req, res) => {
     try {
         const [branches] = await dbPool.query('SELECT DISTINCT branch_code, branch_name FROM programs ORDER BY branch_code');
-        res.render('report-generator', { userType: 'student', reportData: null, visitCounts: [], filters: null, error: req.query.error, branches: branches });
+        res.render('report-generator', { userType: 'student', reportData: null, visitCounts: [], filters: null, error: req.query.error, branches: branches, departments: [] });
     } catch (error) {
-         res.render('report-generator', { userType: 'student', reportData: null, visitCounts: [], filters: null, error: 'Could not load branch data.', branches: [] });
+         res.render('report-generator', { userType: 'student', reportData: null, visitCounts: [], filters: null, error: 'Could not load branch data.', branches: [], departments: [] });
     }
 });
-app.get('/reports/faculty', isAuthenticated, (req, res) => {
-    // Faculty doesn't need branch filter, pass empty array
-    res.render('report-generator', { userType: 'faculty', reportData: null, visitCounts: [], filters: null, error: req.query.error, branches: [] });
+// MODIFIED: Department dropdown added to faculty reports
+app.get('/reports/faculty', isAuthenticated, async (req, res) => {
+    try {
+        const [departments] = await dbPool.query('SELECT DISTINCT department_id, department_name FROM departments ORDER BY department_name');
+        res.render('report-generator', { userType: 'faculty', reportData: null, visitCounts: [], filters: null, error: req.query.error, branches: [], departments: departments }); // Pass departments
+    } catch (error) {
+         res.render('report-generator', { userType: 'faculty', reportData: null, visitCounts: [], filters: null, error: 'Could not load department data.', branches: [], departments: [] });
+    }
 });
 
-// MODIFIED: Report preview logic updated to handle branch filter
+// MODIFIED: Report preview logic updated for multi-select branch/dept
 app.post('/reports/preview', isAuthenticated, async (req, res) => {
-    const { user_type, start_date, end_date, branch_code } = req.body;
+    let { user_type, start_date, end_date, branch_code, department_id } = req.body;
     let detailQuery, countQuery;
     let params = [start_date, end_date];
     let countParams = [start_date, end_date];
+
+    let branches = [];
+    let departments = [];
 
     if (user_type === 'student') {
         let detailWhere = `WHERE u.user_type = 'student' AND al.log_date BETWEEN ? AND ?`;
         let countWhere = `WHERE u.user_type = 'student' AND al.log_date BETWEEN ? AND ?`;
         
-        if (branch_code && branch_code !== 'all') {
-            detailWhere += ' AND p.branch_code = ?';
-            countWhere += ' AND p.branch_code = ?';
-            params.push(branch_code);
-            countParams.push(branch_code);
+        // Handle multi-select array
+        if (branch_code) {
+            const branchesToFilter = Array.isArray(branch_code) ? branch_code : [branch_code];
+            if (branchesToFilter.length > 0 && !branchesToFilter.includes('all')) {
+                detailWhere += ` AND p.branch_code IN (?)`;
+                countWhere += ` AND p.branch_code IN (?)`;
+                params.push(branchesToFilter);
+                countParams.push(branchesToFilter);
+            }
         }
-
         detailQuery = `SELECT al.user_id, u.user_name, p.branch_name as group_name, DATE_FORMAT(al.log_date, '%Y-%m-%d') as log_date, al.login_time, al.logout_time FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN programs p ON u.program_id = p.program_id ${detailWhere} ORDER BY al.log_date, al.login_time;`;
         countQuery = `SELECT p.degree, COUNT(al.log_id) as count FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN programs p ON u.program_id = p.program_id ${countWhere} GROUP BY p.degree ORDER BY p.degree;`;
+        [branches] = await dbPool.query('SELECT DISTINCT branch_code, branch_name FROM programs ORDER BY branch_code');
     
-    } else { 
-        detailQuery = `SELECT al.user_id, u.user_name, d.department_name as group_name, DATE_FORMAT(al.log_date, '%Y-%m-%d') as log_date, al.login_time, al.logout_time FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN departments d ON u.department_id = d.department_id WHERE u.user_type = 'faculty' AND al.log_date BETWEEN ? AND ? ORDER BY al.log_date, al.login_time;`; 
-        countQuery = `SELECT d.department_name as group_name, COUNT(al.log_id) as count FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN departments d ON u.department_id = d.department_id WHERE u.user_type = 'faculty' AND al.log_date BETWEEN ? AND ? GROUP BY d.department_name ORDER BY d.department_name;`;
-        params = countParams; // Use same params for faculty
+    } else { // faculty
+        let detailWhere = `WHERE u.user_type = 'faculty' AND al.log_date BETWEEN ? AND ?`;
+        let countWhere = `WHERE u.user_type = 'faculty' AND al.log_date BETWEEN ? AND ?`;
+
+        if (department_id) {
+            const deptsToFilter = Array.isArray(department_id) ? department_id : [department_id];
+            if (deptsToFilter.length > 0 && !deptsToFilter.includes('all')) {
+                detailWhere += ` AND d.department_id IN (?)`;
+                countWhere += ` AND d.department_id IN (?)`;
+                params.push(deptsToFilter);
+                countParams.push(deptsToFilter);
+            }
+        }
+        detailQuery = `SELECT al.user_id, u.user_name, d.department_name as group_name, DATE_FORMAT(al.log_date, '%Y-%m-%d') as log_date, al.login_time, al.logout_time FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN departments d ON u.department_id = d.department_id ${detailWhere} ORDER BY al.log_date, al.login_time;`; 
+        countQuery = `SELECT d.department_name as group_name, COUNT(al.log_id) as count FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN departments d ON u.department_id = d.department_id ${countWhere} GROUP BY d.department_name ORDER BY d.department_name;`;
+        [departments] = await dbPool.query('SELECT DISTINCT department_id, department_name FROM departments ORDER BY department_name');
     }
     
-    try {
-        const [reportData] = await dbPool.query(detailQuery, params);
-        const [visitCounts] = await dbPool.query(countQuery, countParams);
-        const [branches] = (user_type === 'student') ? await dbPool.query('SELECT DISTINCT branch_code, branch_name FROM programs ORDER BY branch_code') : [[]];
-        
-        res.render('report-generator', {
-            userType: user_type, reportData: reportData, visitCounts: visitCounts, filters: req.body, branches: branches
-        });
+    try { 
+        const [reportData] = await dbPool.query(detailQuery, params); 
+        const [visitCounts] = await dbPool.query(countQuery, countParams); 
+        res.render('report-generator', { userType: user_type, reportData: reportData, visitCounts: visitCounts, filters: req.body, branches: branches, departments: departments }); 
     } catch (error) { 
         console.error("Report preview error:", error); 
-        const [branches] = (user_type === 'student') ? await dbPool.query('SELECT DISTINCT branch_code, branch_name FROM programs ORDER BY branch_code') : [[]];
-        res.render('report-generator', { userType: user_type, reportData: null, visitCounts: [], filters: req.body, error: 'Failed to generate report.', branches: branches });
+        res.render('report-generator', { userType: user_type, reportData: null, visitCounts: [], filters: req.body, error: 'Failed to generate report.', branches: branches, departments: departments });
     }
 });
 
-// MODIFIED: Report download logic updated to handle branch filter
+// MODIFIED: Report download logic updated for multi-select
 app.post('/reports/download', isAuthenticated, async (req, res) => {
-    const { user_type, start_date, end_date, branch_code } = req.body;
+    let { user_type, start_date, end_date } = req.body;
+    // Handle array/string from form for multi-select
+    let branch_code = req.body['branch_code[]'] || req.body.branch_code;
+    let department_id = req.body['department_id[]'] || req.body.department_id;
+    
     let query;
     let params = [start_date, end_date];
 
     if (user_type === 'student') {
         let whereClause = `WHERE u.user_type = 'student' AND al.log_date BETWEEN ? AND ?`;
-        if (branch_code && branch_code !== 'all') {
-            whereClause += ' AND p.branch_code = ?';
-            params.push(branch_code);
+        if (branch_code) {
+            const branchesToFilter = Array.isArray(branch_code) ? branch_code : [branch_code];
+            if (branchesToFilter.length > 0 && !branchesToFilter.includes('all')) {
+                whereClause += ` AND p.branch_code IN (?)`;
+                params.push(branchesToFilter);
+            }
         }
         query = `SELECT al.user_id, u.user_name, p.branch_name as group_name, DATE_FORMAT(al.log_date, '%Y-%m-%d') as log_date, TIME_FORMAT(al.login_time, '%H:%i:%s') as login_time, TIME_FORMAT(al.logout_time, '%H:%i:%s') as logout_time FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN programs p ON u.program_id = p.program_id ${whereClause} ORDER BY al.log_date, al.login_time;`;
     } else { 
-        query = `SELECT al.user_id, u.user_name, d.department_name as group_name, DATE_FORMAT(al.log_date, '%Y-%m-%d') as log_date, TIME_FORMAT(al.login_time, '%H:%i:%s') as login_time, TIME_FORMAT(al.logout_time, '%H:%i:%s') as logout_time FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN departments d ON u.department_id = d.department_id WHERE u.user_type = 'faculty' AND al.log_date BETWEEN ? AND ? ORDER BY al.log_date, al.login_time;`;
+        let whereClause = `WHERE u.user_type = 'faculty' AND al.log_date BETWEEN ? AND ?`;
+        if (department_id) {
+            const deptsToFilter = Array.isArray(department_id) ? department_id : [department_id];
+            if (deptsToFilter.length > 0 && !deptsToFilter.includes('all')) {
+                whereClause += ` AND d.department_id IN (?)`;
+                params.push(deptsToFilter);
+            }
+        }
+        query = `SELECT al.user_id, u.user_name, d.department_name as group_name, DATE_FORMAT(al.log_date, '%Y-%m-%d') as log_date, TIME_FORMAT(al.login_time, '%H:%i:%s') as login_time, TIME_FORMAT(al.logout_time, '%H:%i:%s') as logout_time FROM attendance_log al JOIN users u ON al.user_id = u.user_id JOIN departments d ON u.department_id = d.department_id ${whereClause} ORDER BY al.log_date, al.login_time;`;
     }
     
     try { 
@@ -305,15 +362,16 @@ app.post('/reports/download', isAuthenticated, async (req, res) => {
     } catch (error) { console.error("Excel download error:", error); res.status(500).send("Failed to generate Excel file."); }
 });
 
-// NEW: Separate User Management Pages
+// MODIFIED: Renamed route
 app.get('/manage-student', isAuthenticated, async (req, res) => {
     try { const [programs] = await dbPool.query('SELECT * FROM programs ORDER BY degree, branch_name'); res.render('manage-student', { messages: req.query, programs: programs }); } catch (error) { res.render('manage-student', { messages: { error: 'Could not load page data.' }, programs: [] }); }
 });
+// MODIFIED: Renamed route
 app.get('/manage-faculty', isAuthenticated, async (req, res) => {
      try { const [departments] = await dbPool.query('SELECT * FROM departments ORDER BY department_name'); res.render('manage-faculty', { messages: req.query, departments: departments }); } catch (error) { res.render('manage-faculty', { messages: { error: 'Could not load page data.' }, departments: [] }); }
 });
 
-// User Management POST Actions (Redirects updated)
+// MODIFIED: POST routes updated to redirect to new singular page names
 app.post('/add-student-manual', isAuthenticated, async (req, res) => {
     const { user_id, user_name, year, program_id } = req.body; try { await dbPool.query(`INSERT INTO users (user_id, user_type, user_name, year, program_id) VALUES (?, 'student', ?, ?, ?)`, [user_id, user_name, year, program_id]); res.redirect('/manage-student?success=Student added!'); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.redirect('/manage-student?error=ID exists.'); res.redirect('/manage-student?error=Failed.'); }
 });
@@ -323,6 +381,7 @@ app.post('/upload-students-excel', isAuthenticated, upload.single('userFile'), a
         if (studentsToInsert.length > 0) { await connection.beginTransaction(); await connection.query(`INSERT INTO users (user_id, user_type, user_name, program_id, year) VALUES ?`, [studentsToInsert]); await connection.commit(); } res.redirect(`/manage-student?success=${studentsToInsert.length} uploaded!`);
     } catch (error) { if (connection) await connection.rollback(); res.redirect(`/manage-student?error=${error.message}`); } finally { if (connection) connection.release(); if (req.file) fs.unlink(req.file.path, (err) => { if (err) console.error("Err delete temp:", err); }); }
 });
+
 app.post('/add-faculty-manual', isAuthenticated, async (req, res) => {
     const { user_id, user_name, designation, department_id } = req.body; try { await dbPool.query(`INSERT INTO users (user_id, user_type, user_name, designation, department_id) VALUES (?, 'faculty', ?, ?, ?)`, [user_id, user_name, designation, department_id]); res.redirect('/manage-faculty?success=Faculty added!'); } catch (error) { if (error.code === 'ER_DUP_ENTRY') return res.redirect('/manage-faculty?error=ID exists.'); res.redirect('/manage-faculty?error=Failed.'); }
 });
@@ -404,16 +463,195 @@ app.post('/manage-departments/delete/:id', isAuthenticated, async (req, res) => 
     }
 });
 
+// NEW: Manual Logout Routes
+app.post('/logout-user', isAuthenticated, async (req, res) => {
+    const { log_id } = req.body;
+    const currentTime = format(new Date(), 'HH:mm:ss');
+    try {
+        await dbPool.query("UPDATE attendance_log SET logout_time = ? WHERE log_id = ? AND logout_time IS NULL", [currentTime, log_id]);
+        res.redirect('/dashboard?success=User logged out.');
+    } catch (error) {
+        console.error("Manual logout error:", error);
+        res.redirect('/dashboard?error=Failed to log out user.');
+    }
+});
+app.post('/logout-all', isAuthenticated, async (req, res) => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const currentTime = format(new Date(), 'HH:mm:ss');
+    try {
+        // Only log out students, not faculty
+        const [result] = await dbPool.query(
+            `UPDATE attendance_log al
+             JOIN users u ON al.user_id = u.user_id
+             SET al.logout_time = ? 
+             WHERE al.log_date = ? AND al.logout_time IS NULL AND u.user_type = 'student'`, 
+            [currentTime, today]
+        );
+        res.redirect(`/dashboard?success=Successfully logged out ${result.affectedRows} students.`);
+    } catch (error) {
+        console.error("Mass logout error:", error);
+        res.redirect('/dashboard?error=Failed to mass log out students.');
+    }
+});
+
+// NEW: Routes for Manage Details pages
+app.get('/manage-student-details', isAuthenticated, async (req, res) => {
+    try {
+        const [programs] = await dbPool.query('SELECT * FROM programs ORDER BY degree, branch_name');
+        res.render('manage-student-details', { 
+            messages: req.query, 
+            searchResult: null,
+            programs: programs 
+        });
+    } catch (error) {
+        res.render('manage-student-details', { messages: { error: 'Could not load programs.'}, searchResult: null, programs: [] });
+    }
+});
+app.get('/manage-faculty-details', isAuthenticated, async (req, res) => {
+    try {
+        const [departments] = await dbPool.query('SELECT * FROM departments ORDER BY department_name');
+        res.render('manage-faculty-details', { 
+            messages: req.query, 
+            searchResult: null,
+            departments: departments 
+        });
+    } catch (error) {
+        res.render('manage-faculty-details', { messages: { error: 'Could not load departments.'}, searchResult: null, departments: [] });
+    }
+});
+
+// NEW: Search for user to edit
+app.post('/user/search', isAuthenticated, async (req, res) => {
+    const { user_id_search, user_type } = req.body;
+    
+    const managePage = user_type === 'student' ? 'manage-student-details' : 'manage-faculty-details';
+    
+    if (!user_id_search) {
+        return res.redirect(`/${managePage}?error=Please enter a User ID to search.`);
+    }
+    
+    try {
+        const [userRows] = await dbPool.query('SELECT * FROM users WHERE user_id = ? AND user_type = ?', [user_id_search, user_type]);
+        
+        if (userRows.length === 0) {
+            return res.redirect(`/${managePage}?error=User not found or is not a ${user_type}.`);
+        }
+        
+        const user = userRows[0];
+        let programs = [];
+        let departments = [];
+
+        if (user_type === 'student') {
+            [programs] = await dbPool.query('SELECT * FROM programs ORDER BY degree, branch_name');
+        } else {
+            [departments] = await dbPool.query('SELECT * FROM departments ORDER BY department_name');
+        }
+        
+        res.render(managePage, { 
+            messages: { success: `Found user ${user.user_name}.` }, 
+            searchResult: user, 
+            programs: programs,
+            departments: departments
+        });
+
+    } catch (error) {
+        console.error("User search error:", error);
+        res.redirect(`/${managePage}?error=An error occurred during the search.`);
+    }
+});
+
+// NEW: Update user details
+app.post('/user/update', isAuthenticated, async (req, res) => {
+    const { user_id, user_name, user_type, year, program_id, designation, department_id } = req.body;
+    const managePage = user_type === 'student' ? 'manage-student-details' : 'manage-faculty-details';
+    
+    try {
+        if (user_type === 'student') {
+            if (!user_name || !year || !program_id) throw new Error('Missing fields for student.');
+            await dbPool.query(
+                'UPDATE users SET user_name = ?, year = ?, program_id = ? WHERE user_id = ? AND user_type = "student"',
+                [user_name, year, program_id, user_id]
+            );
+        } else if (user_type === 'faculty') {
+            if (!user_name || !designation || !department_id) throw new Error('Missing fields for faculty.');
+            await dbPool.query(
+                'UPDATE users SET user_name = ?, designation = ?, department_id = ? WHERE user_id = ? AND user_type = "faculty"',
+                [user_name, designation, department_id, user_id]
+            );
+        } else {
+            throw new Error('Invalid user type.');
+        }
+        res.redirect(`/${managePage}?success=User ${user_id} updated successfully.`);
+    } catch (error) {
+        console.error("User update error:", error);
+        res.redirect(`/${managePage}?error=Failed to update user: ${error.message}`);
+    }
+});
+
+// NEW: Mass student delete route
+app.post('/delete-students-mass', isAuthenticated, async (req, res) => {
+    const { program_id, year, verification } = req.body;
+    
+    if (verification !== 'confirm delete') {
+        return res.redirect('/manage-student-details?error=Verification text did not match. No students were deleted.');
+    }
+    if (!program_id || !year) {
+        return res.redirect('/manage-student-details?error=Program and Year are required for mass delete.');
+    }
+
+    const connection = await dbPool.getConnection();
+    try {
+        await connection.beginTransaction();
+        
+        const [usersToDelete] = await connection.query(
+            'SELECT user_id FROM users WHERE user_type = "student" AND program_id = ? AND year = ?',
+            [program_id, year]
+        );
+        
+        if (usersToDelete.length === 0) {
+            throw new Error('No students found matching that Program and Year.');
+        }
+        
+        const userIds = usersToDelete.map(u => u.user_id);
+        
+        // Assuming ON DELETE CASCADE is set for rfid_details and attendance_log foreign keys
+        // If not, you must delete from those tables first.
+        // 1. Delete from rfid_details
+        await connection.query('DELETE FROM rfid_details WHERE user_id IN (?)', [userIds]);
+        // 2. Delete from attendance_log
+        await connection.query('DELETE FROM attendance_log WHERE user_id IN (?)', [userIds]);
+        // 3. Delete from users
+        const [result] = await connection.query('DELETE FROM users WHERE user_id IN (?)', [userIds]);
+        
+        await connection.commit();
+        res.redirect(`/manage-student-details?success=${result.affectedRows} students have been permanently deleted.`);
+
+    } catch (error) {
+        await connection.rollback();
+        console.error("Mass delete error:", error);
+        res.redirect(`/manage-student-details?error=An error occurred: ${error.message}`);
+    } finally {
+        connection.release();
+    }
+});
+
+
 // --- Scheduled Tasks ---
-// MODIFIED: Logout time changed to 7 PM
-async function autoLogoutCurrentDay() { const today = format(new Date(), 'yyyy-MM-dd'); const logoutTime = '19:00:00'; try { const [result] = await dbPool.query(`UPDATE attendance_log SET logout_time = ? WHERE log_date = ? AND logout_time IS NULL`, [logoutTime, today]); if (result.affectedRows > 0) console.log(`Auto-logged out ${result.affectedRows} for ${today}.`); } catch (error) { console.error('Auto-logout error:', error); } }
-async function cleanupPreviousDays() { const today = format(new Date(), 'yyyy-MM-dd'); const logoutTime = '19:00:00'; try { const [result] = await dbPool.query(`UPDATE attendance_log SET logout_time = ? WHERE log_date < ? AND logout_time IS NULL`, [logoutTime, today]); if (result.affectedRows > 0) console.log(`Startup Cleanup: Logged out ${result.affectedRows} prev days.`); } catch (error) { console.error('Cleanup error:', error); } }
-// MODIFIED: Cron schedule changed to 7:05 PM
+async function autoLogoutCurrentDay() {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const logoutTime = '19:00:00'; // MODIFIED: 7 PM
+    try { const [result] = await dbPool.query(`UPDATE attendance_log SET logout_time = ? WHERE log_date = ? AND logout_time IS NULL`, [logoutTime, today]); if (result.affectedRows > 0) console.log(`Auto-logged out ${result.affectedRows} for ${today}.`); } catch (error) { console.error('Auto-logout error:', error); }
+}
+async function cleanupPreviousDays() {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const logoutTime = '19:00:00'; // MODIFIED: 7 PM
+    try { const [result] = await dbPool.query(`UPDATE attendance_log SET logout_time = ? WHERE log_date < ? AND logout_time IS NULL`, [logoutTime, today]); if (result.affectedRows > 0) console.log(`Startup Cleanup: Logged out ${result.affectedRows} prev days.`); } catch (error) { console.error('Cleanup error:', error); }
+}
+// MODIFIED: Cron job time updated to 7:05 PM
 cron.schedule('5 19 * * *', () => { console.log('Running daily auto-logout...'); autoLogoutCurrentDay(); }, { scheduled: true, timezone: "Asia/Kolkata" });
 
 // --- Start Server ---
-// MODIFIED: Listen on 0.0.0.0 to be accessible on LAN
-server.listen(PORT, '0.0.0.0', () => { 
+server.listen(PORT, '0.0.0.0', () => { // Listen on 0.0.0.0 to be accessible on LAN
   console.log(`🚀 Server running locally at: http://localhost:${PORT}/dashboard`);
   if (localIp) {
     console.log(`🌐 Access from other devices on the network: http://${localIp}:${PORT}/dashboard`);
