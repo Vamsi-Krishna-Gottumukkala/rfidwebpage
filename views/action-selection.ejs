@@ -20,10 +20,10 @@
         .panel { background: white; padding: 2em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2em; text-align: center; }
         .back-link { font-weight: bold; color: #65676b; text-decoration: none; display: inline-block; margin-bottom: 1.5em; float: left; }
 
-        /* MODIFIED: Changed to a responsive grid layout */
+        /* MODIFIED: Card layout is now a responsive grid */
         .card-selection-container {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Creates 2 or 3 columns */
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* 1-3 columns */
             gap: 2em;
             justify-content: center;
             margin-top: 3em;
@@ -35,8 +35,9 @@
         .report-icon-bg { background: linear-gradient(135deg, #9966FF, #B399FF); }
         .rfid-edit-icon-bg { background: linear-gradient(135deg, #0dcaf0, #0aa3c2); }
         .program-icon-bg { background: linear-gradient(135deg, #ffc107, #ff9800); }
-        .dept-icon-bg { background: linear-gradient(135deg, #6f42c1, #8a63d2); } /* Purple */
-
+        .dept-icon-bg { background: linear-gradient(135deg, #6f42c1, #8a63d2); } 
+        .manage-icon-bg { background: linear-gradient(135deg, #fd7e14, #f86624); } /* Orange */
+        
         .action-card h2 { margin: 0 0 0.5em 0; font-size: 1.6em; }
         .action-card p { font-size: 1em; color: #65676b; line-height: 1.4; }
     </style>
@@ -75,8 +76,7 @@
                     <div class="card-icon-background upload-icon-bg">
                         <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                     </div>
-                    <h2>Upload / Manage Data</h2>
-                    <p>Add new <%= userType %>s individually or upload an Excel file.</p>
+                    <h2>Upload Data</h2> <p>Add new <%= userType %>s individually or upload an Excel file.</p>
                 </a>
                 <a href="/reports/<%= userType %>" class="action-card">
                      <div class="card-icon-background report-icon-bg">
@@ -85,6 +85,15 @@
                     <h2>Generate Report</h2>
                     <p>Create and download attendance reports.</p>
                 </a>
+                
+                <a href="/manage-<%= userType === 'student' ? 'student' : 'faculty' %>-details" class="action-card">
+                    <div class="card-icon-background manage-icon-bg">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    </div>
+                    <h2>Manage <%= userType.charAt(0).toUpperCase() + userType.slice(1) %> Details</h2>
+                    <p>Edit existing user data<% if (userType === 'student') { %> or mass delete users<% } %>.</p>
+                </a>
+                
                 <a href="/edit-rfid?from=<%= userType %>" class="action-card">
                      <div class="card-icon-background rfid-edit-icon-bg">
                          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path><path d="m15 5 3 3"></path><path d="M3 14a1 1 0 0 0 .6-.2l4-3.5a1 1 0 0 0 .6-.9V6"></path><path d="M7 14v2"></path><path d="M5 16v2"></path></svg>
@@ -99,7 +108,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
                     </div>
                     <h2>Manage Programs</h2>
-                    <p>Add, edit, or delete academic degrees and branches.</p>
+                    <p>Add or delete academic degrees and branches.</p>
                 </a>
                 <% } else { %>
                 <a href="/manage-departments" class="action-card">
@@ -107,11 +116,16 @@
                          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
                     </div>
                     <h2>Manage Departments</h2>
-                    <p>Add, edit, or delete faculty departments.</p>
+                    <p>Add or delete faculty departments.</p>
                 </a>
                 <% } %>
             </div>
         </div>
     </div>
+    
+    <footer style="text-align: center; padding: 2em; color: #65676b; margin-top: 2em;">
+        2025 GVPCDPGC Library Gate Register | Developed by 
+        <a href="/credits" style="color: #0866ff; text-decoration: none; font-weight: 500;">G. Vamsi Krishna & M. Lokesh Reddy</a>
+    </footer>
 </body>
 </html>
