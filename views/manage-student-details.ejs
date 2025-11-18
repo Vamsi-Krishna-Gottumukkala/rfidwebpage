@@ -32,7 +32,10 @@
         .btn-search { background-color: #1877f2; }
         .btn-update { background-color: #31a24c; }
         .btn-delete-mass { background-color: #f02849; }
-        
+        /* NEW: Button style for individual delete */
+        .btn-delete-user { background-color: #c9302c; margin-left: 10px; }
+        .button-row { display: flex; justify-content: flex-end; }
+
         .verification-input { border-color: #f02849; }
         .verification-text { font-size: 0.9em; color: #65676b; }
         
@@ -85,14 +88,16 @@
                     </form>
 
                     <% if (searchResult && searchResult.user_type === 'student') { %>
-                        <form action="/user/update" method="POST">
-                            <input type="hidden" name="user_id" value="<%= searchResult.user_id %>">
-                            <input type="hidden" name="user_type" value="student">
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label>Roll No (Read-only):</label>
-                                    <input type="text" value="<%= searchResult.user_id %>" readonly disabled>
-                                </div>
+                        <!-- Modified: Wrapped update and delete in separate forms or handled actions -->
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Roll No (Read-only):</label>
+                                <input type="text" value="<%= searchResult.user_id %>" readonly disabled>
+                            </div>
+                             <!-- We need a form for update -->
+                             <form action="/user/update" method="POST" style="grid-column: 1 / -1; display:contents;">
+                                <input type="hidden" name="user_id" value="<%= searchResult.user_id %>">
+                                <input type="hidden" name="user_type" value="student">
                                 <div class="form-group">
                                     <label for="user_name">Full Name:</label>
                                     <input type="text" id="user_name" name="user_name" value="<%= searchResult.user_name %>" required>
@@ -112,15 +117,23 @@
                                         <% }); %>
                                     </select>
                                 </div>
-                            </div>
-                            <button type="submit" class="btn-update" style="justify-self: flex-end;">Update Student</button>
-                        </form>
+                                <div class="button-row" style="grid-column: 1 / -1;">
+                                    <button type="submit" class="btn-update">Update Student</button>
+                             </form>
+                                    <!-- NEW: Delete Button Form -->
+                                    <form action="/user/delete" method="POST" onsubmit="return confirm('Are you sure you want to permanently delete this student?');" style="display:inline;">
+                                        <input type="hidden" name="user_id" value="<%= searchResult.user_id %>">
+                                        <input type="hidden" name="user_type" value="student">
+                                        <button type="submit" class="btn-delete-user">Delete Student</button>
+                                    </form>
+                                </div>
+                        </div>
                     <% } %>
                 </div>
 
                 <div class="form-column" style="background-color: #fff8f8; border-color: #f02849;">
                     <h3 style="color: #c9302c;">Danger Zone: Mass Delete Students</h3>
-                    <form action="/delete-students-mass" method="POST" onsubmit="return confirm('WARNING: This action is irreversible and will permanently delete all students matching this Program and Year, along with their RFID and attendance records. Are you absolutely sure?');">
+                    <form action="/delete-students-mass" method="POST" onsubmit="return confirm('WARNING: This action is irreversible and will permanently delete all students matching this Program and Year. Are you absolutely sure?');">
                         <div class="form-grid">
                             <div class="form-group">
                                 <label for="program_id_delete">Program:</label>

@@ -31,6 +31,8 @@
         button { padding: 0.8em 1.5em; color: white; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; }
         .btn-search { background-color: #1877f2; }
         .btn-update { background-color: #31a24c; }
+        .btn-delete-user { background-color: #c9302c; margin-left: 10px; }
+        .button-row { display: flex; justify-content: flex-end; }
         
         .flash { padding: 1em; margin-bottom: 1em; border-radius: 4px; text-align: center; }
         .flash.success { background-color: #d4edda; color: #155724; }
@@ -81,10 +83,10 @@
                     </form>
 
                     <% if (searchResult && searchResult.user_type === 'faculty') { %>
-                        <form action="/user/update" method="POST">
-                            <input type="hidden" name="user_id" value="<%= searchResult.user_id %>">
-                            <input type="hidden" name="user_type" value="faculty">
-                            <div class="form-grid">
+                        <div class="form-grid">
+                             <form action="/user/update" method="POST" style="grid-column: 1 / -1; display:contents;">
+                                <input type="hidden" name="user_id" value="<%= searchResult.user_id %>">
+                                <input type="hidden" name="user_type" value="faculty">
                                 <div class="form-group">
                                     <label>Faculty ID (Read-only):</label>
                                     <input type="text" value="<%= searchResult.user_id %>" readonly disabled>
@@ -108,9 +110,17 @@
                                         <% }); %>
                                     </select>
                                 </div>
-                            </div>
-                            <button type="submit" class="btn-update" style="justify-self: flex-end;">Update Faculty</button>
-                        </form>
+                                <div class="button-row" style="grid-column: 1 / -1;">
+                                    <button type="submit" class="btn-update">Update Faculty</button>
+                             </form>
+                                    <!-- NEW: Delete Button Form -->
+                                    <form action="/user/delete" method="POST" onsubmit="return confirm('Are you sure you want to permanently delete this faculty member?');" style="display:inline;">
+                                        <input type="hidden" name="user_id" value="<%= searchResult.user_id %>">
+                                        <input type="hidden" name="user_type" value="faculty">
+                                        <button type="submit" class="btn-delete-user">Delete Faculty</button>
+                                    </form>
+                                </div>
+                        </div>
                     <% } %>
                 </div>
             </div>
