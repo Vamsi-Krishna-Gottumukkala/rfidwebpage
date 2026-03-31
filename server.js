@@ -229,7 +229,7 @@ app.post('/reports/preview', isAuthenticated, async (req, res) => {
 });
 
 app.post('/reports/download', isAuthenticated, async (req, res) => {
-    let { user_type, start_date, end_date, 'branch_code[]': branch_code, 'department_id[]': department_id } = req.body;
+    let { user_type, start_date, end_date, branch_code, department_id } = req.body;
     if (branch_code && !Array.isArray(branch_code)) branch_code = [branch_code]; if (department_id && !Array.isArray(department_id)) department_id = [department_id];
     let query; let params = [start_date, end_date];
     if (user_type === 'student') {
