@@ -208,16 +208,16 @@
                     
                     <% if (filters.branch_code) { %>
                         <% if (Array.isArray(filters.branch_code)) { %>
-                            <% filters.branch_code.forEach(code => { %> <input type="hidden" name="branch_code[]" value="<%= code %>"> <% }); %>
+                            <% filters.branch_code.forEach(code => { %> <input type="hidden" name="branch_code" value="<%= code %>"> <% }); %>
                         <% } else { %>
-                            <input type="hidden" name="branch_code[]" value="<%= filters.branch_code %>">
+                            <input type="hidden" name="branch_code" value="<%= filters.branch_code %>">
                         <% } %>
                     <% } %>
                      <% if (filters.department_id) { %>
                         <% if (Array.isArray(filters.department_id)) { %>
-                            <% filters.department_id.forEach(id => { %> <input type="hidden" name="department_id[]" value="<%= id %>"> <% }); %>
+                            <% filters.department_id.forEach(id => { %> <input type="hidden" name="department_id" value="<%= id %>"> <% }); %>
                         <% } else { %>
-                            <input type="hidden" name="department_id[]" value="<%= filters.department_id %>">
+                            <input type="hidden" name="department_id" value="<%= filters.department_id %>">
                         <% } %>
                     <% } %>
                     
